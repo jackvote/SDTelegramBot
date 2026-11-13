@@ -31,7 +31,8 @@ launch_sd_at_bot_started = True
 is_wait_sd_launch = True
 time_the_next_check_s = 1
 
-sd_path = """E:\stable"""
+# Путь к папке Stable Diffusion (задаётся в файле .env, пример — в .env.dist)
+sd_path = env.str("SD_PATH", default=r"E:\stable")
 
 # Отправить фото без сжатия
 send_photo_without_compression = False
