@@ -1,14 +1,9 @@
 """
-Автор: Константин Одинцов
-e-mail: kos5172@yandex.ru
-Github: https://github.com/odintsovkos
-Этот файл — часть SDTelegramBot.
-
-SDTelegramBot — свободная программа: вы можете перераспространять ее и/или изменять ее на условиях Стандартной общественной лицензии GNU в том виде, в каком она была опубликована Фондом свободного программного обеспечения; либо версии 3 лицензии, либо (по вашему выбору) любой более поздней версии.
-
-SDTelegramBot распространяется в надежде, что она будет полезной, но БЕЗО ВСЯКИХ ГАРАНТИЙ; даже без неявной гарантии ТОВАРНОГО ВИДА или ПРИГОДНОСТИ ДЛЯ ОПРЕДЕЛЕННЫХ ЦЕЛЕЙ. Подробнее см. в Стандартной общественной лицензии GNU.
-
-Вы должны были получить копию Стандартной общественной лицензии GNU вместе с этой программой. Если это не так, см. <https://www.gnu.org/licenses/>.
+SDTelegramBot
+Автор: Константин Одинцов (https://github.com/odintsovkos)
+Форк : Jackvote (https://github.com/jackvote/SDTelegramBot)
+Файл : menu.py
+Свободное ПО по условиям GNU GPL v3. Полный текст лицензии - в файле LICENSE в корне репозитория.
 """
 
 import asyncio
@@ -27,57 +22,68 @@ from settings.bot_config import ADMINS
 from states.all_states import SDStates
 from utils.db_services import db_service
 from utils.misc_func import change_style_db, change_lora_db, send_photo, change_model_callback, restarting_sd, \
-    is_sd_launched
+    is_sd_launched, clear_old_menu
 from utils.waiting_bar import waiting_bar
 
-last_prompt = ""
 response_list = []
 callback_data = None
 
-
 @dp.message_handler(state=SDStates.enter_prompt, content_types=types.ContentTypes.TEXT)
 async def entered_prompt_handler(message: types.Message):
-    global last_prompt
-    last_prompt = message['text']
+    prompt = message['text']
+    await db_service.db_set_last_prompt(message.from_user.id, prompt)
     await message.bot.delete_message(message.chat.id, message.message_id)
+    await clear_old_menu(message.bot, message.chat.id, message.from_user.id)
     if is_sd_launched():
-        await send_photo(message, message.from_user.id, last_prompt, response_list)
+        await send_photo(message, message.from_user.id, prompt, response_list)
     else:
         await restarting_sd(message)
         await asyncio.sleep(2)
-        await send_photo(message, message.from_user.id, last_prompt, response_list)
-
+        await send_photo(message, message.from_user.id, prompt, response_list)
 
 @dp.callback_query_handler(state=SDStates.enter_prompt, text='repeat')
 async def current_settings(callback: types.CallbackQuery):
-    global last_prompt
+    import logging
+    prompt = await db_service.db_get_sd_setting(callback.from_user.id, 'sd_last_prompt') or ""
+    logging.info(f"[repeat] Из базы прочитано: {repr(prompt)}")
+    
+    if prompt.find('&') != -1:
+        prompt = prompt[prompt.find('&') + 1:]
+    
+    logging.info(f"[repeat] После обрезки сида: {repr(prompt)}")
+    
     await callback.bot.delete_message(callback.message.chat.id, callback.message.message_id)
-    if last_prompt.find('&') != -1:
-        last_prompt = last_prompt[last_prompt.find('&') + 1:]
-    if last_prompt != "":
+    await clear_old_menu(callback.bot, callback.message.chat.id, callback.from_user.id)
+    
+    if prompt != "":
+        logging.info(f"[repeat] Запускаю генерацию с промптом: {prompt[:50]}")
         if is_sd_launched():
-            await send_photo(callback.message, callback.from_user.id, last_prompt, response_list)
+            await send_photo(callback.message, callback.from_user.id, prompt, response_list)
         else:
+            logging.info("[repeat] SD не запущена, перезапускаю...")
             await restarting_sd(callback)
             await asyncio.sleep(2)
-            await send_photo(callback.message, callback.from_user.id, last_prompt, response_list)
+            await send_photo(callback.message, callback.from_user.id, prompt, response_list)
     else:
+        logging.warning("[repeat] Промпт пустой после обрезки сида!")
         await callback.message.answer("✏️ Введите Prompt", reply_markup=main_menu)
-
-
+        
 @dp.callback_query_handler(state=SDStates.enter_prompt, text='repeat_with_seed')
 async def current_settings(callback: types.CallbackQuery):
+    prompt = await db_service.db_get_sd_setting(callback.from_user.id, 'sd_last_prompt') or ""
+    if prompt.find('&') != -1:
+        prompt = prompt[prompt.find('&') + 1:]
     await callback.bot.delete_message(callback.message.chat.id, callback.message.message_id)
-    if last_prompt != "":
+    await clear_old_menu(callback.bot, callback.message.chat.id, callback.from_user.id)
+    if prompt != "":
         if is_sd_launched():
-            await send_photo(callback.message, callback.from_user.id, last_prompt, response_list, with_seed=True)
+            await send_photo(callback.message, callback.from_user.id, prompt, response_list, with_seed=True)
         else:
             await restarting_sd(callback)
             await asyncio.sleep(2)
-            await send_photo(callback.message, callback.from_user.id, last_prompt, response_list, with_seed=True)
+            await send_photo(callback.message, callback.from_user.id, prompt, response_list, with_seed=True)
     else:
         await callback.message.answer("✏️ Введите Prompt", reply_markup=main_menu)
-
 
 @dp.callback_query_handler(state=SDStates.enter_prompt, text='model')
 async def model_button_handler(callback: types.CallbackQuery, state: FSMContext):
@@ -184,7 +190,7 @@ async def current_settings(callback: types.CallbackQuery, state: FSMContext):
     callback_data = callback
     lora_keyboard = await create_loras_keyboard(callback.from_user.id, state=state)
     if lora_keyboard is None:
-        await callback.message.edit_text("LoRA не найдены", reply_markup=main_menu)
+        await callback.message.edit_text("LoRA не найдены", reply_markup=main_menu)
         await SDStates.enter_prompt.set()
         return
     await callback.message.edit_text(f"👇🏻 Выбери LoRa", reply_markup=lora_keyboard)

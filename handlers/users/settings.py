@@ -1,15 +1,12 @@
 """
-Автор: Константин Одинцов
-e-mail: kos5172@yandex.ru
-Github: https://github.com/odintsovkos
-Этот файл — часть SDTelegramBot.
-
-SDTelegramBot — свободная программа: вы можете перераспространять ее и/или изменять ее на условиях Стандартной общественной лицензии GNU в том виде, в каком она была опубликована Фондом свободного программного обеспечения; либо версии 3 лицензии, либо (по вашему выбору) любой более поздней версии.
-
-SDTelegramBot распространяется в надежде, что она будет полезной, но БЕЗО ВСЯКИХ ГАРАНТИЙ; даже без неявной гарантии ТОВАРНОГО ВИДА или ПРИГОДНОСТИ ДЛЯ ОПРЕДЕЛЕННЫХ ЦЕЛЕЙ. Подробнее см. в Стандартной общественной лицензии GNU.
-
-Вы должны были получить копию Стандартной общественной лицензии GNU вместе с этой программой. Если это не так, см. <https://www.gnu.org/licenses/>.
+SDTelegramBot
+Автор: Константин Одинцов (https://github.com/odintsovkos)
+Форк : Jackvote (https://github.com/jackvote/SDTelegramBot)
+Файл : settings.py
+Свободное ПО по условиям GNU GPL v3. Полный текст лицензии - в файле LICENSE в корне репозитория.
 """
+
+
 import asyncio
 import time
 
@@ -42,7 +39,6 @@ async def settings_command_handler(message: Message):
 
 @dp.message_handler(state=SDStates.settings_set_n_prompt, content_types=types.ContentTypes.TEXT)
 async def nprompt_button_handler(message: Message, state: FSMContext):
-    await state.finish()
     await db_service.db_set_sd_settings(message.from_user.id, "sd_n_prompt", message.text)
     await callback_data.message.edit_text("Negative Prompt установлен", reply_markup=gen_settings_menu)
     await message.bot.delete_message(message_id=message.message_id, chat_id=message.chat.id)
@@ -57,7 +53,7 @@ async def steps_button_handler(message: Message):
         await message.bot.delete_message(message_id=message.message_id, chat_id=message.chat.id)
         await SDStates.gen_settings.set()
     else:
-        await callback_data.message.edit_text("Ошибка ввода", reply_markup=inline_cancel)
+        await message.answer("Ошибка ввода", reply_markup=inline_cancel)
 
 
 @dp.message_handler(state=SDStates.settings_set_cfg_scale, content_types=types.ContentTypes.TEXT)
@@ -68,7 +64,7 @@ async def cfg_scale_button_handler(message: Message):
         await message.bot.delete_message(message_id=message.message_id, chat_id=message.chat.id)
         await SDStates.gen_settings.set()
     except ValueError:
-        await callback_data.message.edit_text("Ошибка ввода", reply_markup=inline_cancel)
+        await message.answer("Ошибка ввода", reply_markup=inline_cancel)
 
 
 @dp.message_handler(state=SDStates.settings_set_batch_count, content_types=types.ContentTypes.TEXT)
@@ -80,9 +76,9 @@ async def batch_count_button_handler(message: Message):
             await message.bot.delete_message(message_id=message.message_id, chat_id=message.chat.id)
             await SDStates.gen_settings.set()
         else:
-            await callback_data.message.edit_text("Batch count должен быть от 1 до 8", reply_markup=inline_cancel)
+            await message.answer("Batch count должен быть от 1 до 8", reply_markup=inline_cancel)
     else:
-        await callback_data.message.edit_text("Введите число", reply_markup=inline_cancel)
+        await message.answer("Введите число", reply_markup=inline_cancel)
 
 
 @dp.callback_query_handler(state=SDStates.settings, text='current_settings')
@@ -214,7 +210,7 @@ async def change_wh_handler(callback: types.CallbackQuery, state: FSMContext):
     state_data = await state.get_data()
     current_model_page = state_data.get('current_page')
     num_pages = state_data.get('num_pages')
-    action = callback.data.split("_")[1]
+    action = callback.data[6:]
 
     if action == "prev_page":
         if current_model_page > 0:
@@ -237,7 +233,7 @@ async def change_wh_handler(callback: types.CallbackQuery, state: FSMContext):
             await callback.answer()
 
     else:
-        await db_service.db_set_sd_settings(callback.from_user.id, "sd_width_height", action[6:])
+        await db_service.db_set_sd_settings(callback.from_user.id, "sd_width_height", action)
         await callback.message.edit_text(f"<b>Width x Height задан</b>", reply_markup=gen_settings_menu)
         await SDStates.gen_settings.set()
 

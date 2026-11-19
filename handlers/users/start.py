@@ -1,15 +1,12 @@
 """
-Автор: Константин Одинцов
-e-mail: kos5172@yandex.ru
-Github: https://github.com/odintsovkos
-Этот файл — часть SDTelegramBot.
-
-SDTelegramBot — свободная программа: вы можете перераспространять ее и/или изменять ее на условиях Стандартной общественной лицензии GNU в том виде, в каком она была опубликована Фондом свободного программного обеспечения; либо версии 3 лицензии, либо (по вашему выбору) любой более поздней версии.
-
-SDTelegramBot распространяется в надежде, что она будет полезной, но БЕЗО ВСЯКИХ ГАРАНТИЙ; даже без неявной гарантии ТОВАРНОГО ВИДА или ПРИГОДНОСТИ ДЛЯ ОПРЕДЕЛЕННЫХ ЦЕЛЕЙ. Подробнее см. в Стандартной общественной лицензии GNU.
-
-Вы должны были получить копию Стандартной общественной лицензии GNU вместе с этой программой. Если это не так, см. <https://www.gnu.org/licenses/>.
+SDTelegramBot
+Автор: Константин Одинцов (https://github.com/odintsovkos)
+Форк : Jackvote (https://github.com/jackvote/SDTelegramBot)
+Файл : start.py
+Свободное ПО по условиям GNU GPL v3. Полный текст лицензии - в файле LICENSE в корне репозитория.
 """
+
+
 
 
 from aiogram.dispatcher.filters.builtin import CommandStart
@@ -22,7 +19,7 @@ from states.all_states import SDStates
 from utils.db_services import db_service
 
 
-@dp.message_handler(CommandStart())
+@dp.message_handler(CommandStart(), state="*")
 async def bot_start(message: Message):
     db_users_response = await db_service.db_get_sd_setting(message.from_user.id, 'tg_id')
     if message.from_user.id == db_users_response or message.from_user.id in ADMINS:

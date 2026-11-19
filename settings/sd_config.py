@@ -1,15 +1,12 @@
 """
-Автор: Константин Одинцов
-e-mail: kos5172@yandex.ru
-Github: https://github.com/odintsovkos
-Этот файл — часть SDTelegramBot.
-
-SDTelegramBot — свободная программа: вы можете перераспространять ее и/или изменять ее на условиях Стандартной общественной лицензии GNU в том виде, в каком она была опубликована Фондом свободного программного обеспечения; либо версии 3 лицензии, либо (по вашему выбору) любой более поздней версии.
-
-SDTelegramBot распространяется в надежде, что она будет полезной, но БЕЗО ВСЯКИХ ГАРАНТИЙ; даже без неявной гарантии ТОВАРНОГО ВИДА или ПРИГОДНОСТИ ДЛЯ ОПРЕДЕЛЕННЫХ ЦЕЛЕЙ. Подробнее см. в Стандартной общественной лицензии GNU.
-
-Вы должны были получить копию Стандартной общественной лицензии GNU вместе с этой программой. Если это не так, см. <https://www.gnu.org/licenses/>.
+SDTelegramBot
+Автор: Константин Одинцов (https://github.com/odintsovkos)
+Форк : Jackvote (https://github.com/jackvote/SDTelegramBot)
+Файл : sd_config.py
+Свободное ПО по условиям GNU GPL v3. Полный текст лицензии - в файле LICENSE в корне репозитория.
 """
+
+
 
 
 from utils.sd_api import api_service
@@ -18,10 +15,11 @@ from utils.sd_api import api_service
 save_files = False
 
 # Путь к папке для сохраненный изображений. Пример: "outputs/txt2img-images"
-output_folder = 'outputs/txt2img-images'
+output_folder = 'outputs/txt2img-users'
 
 # Включение дополнения ADetailer
-adetailer_on = True
+adetailer_on = False
+translate_on = True
 
 
 # Параметры по умолчанию
@@ -36,16 +34,16 @@ def get_default_params(tg_id):
                                  'extra limb,missing limb,'
                                  'floating limbs,(mutated hands and fingers:1.4),disconnected limbs,mutation,mutated,'
                                  'ugly,disgusting,'
-                                 'blurry,amputation',
+                                 'blurry,amputation,asian,',
               "sampler_name": 'Euler a',
               "steps": 22,
-              "width_height": '640x640',
+              "width_height": '576x768',
               "cfg_scale": '7.0',
-              "batch_count": 1,
+              "batch_count": 3,
               "enable_hr": 0,
               "hr_upscaler": upscalers[1]['name'],
               "hr_second_pass_steps": 12,
               "denoising_strength": 0.2,
-              "hr_scale": 2}
+              "hr_scale": 1.5}
 
     return params

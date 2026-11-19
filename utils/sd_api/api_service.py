@@ -1,23 +1,20 @@
 """
-Автор: Константин Одинцов
-e-mail: kos5172@yandex.ru
-Github: https://github.com/odintsovkos
-Этот файл — часть SDTelegramBot.
-
-SDTelegramBot — свободная программа: вы можете перераспространять ее и/или изменять ее на условиях Стандартной общественной лицензии GNU в том виде, в каком она была опубликована Фондом свободного программного обеспечения; либо версии 3 лицензии, либо (по вашему выбору) любой более поздней версии.
-
-SDTelegramBot распространяется в надежде, что она будет полезной, но БЕЗО ВСЯКИХ ГАРАНТИЙ; даже без неявной гарантии ТОВАРНОГО ВИДА или ПРИГОДНОСТИ ДЛЯ ОПРЕДЕЛЕННЫХ ЦЕЛЕЙ. Подробнее см. в Стандартной общественной лицензии GNU.
-
-Вы должны были получить копию Стандартной общественной лицензии GNU вместе с этой программой. Если это не так, см. <https://www.gnu.org/licenses/>.
+SDTelegramBot
+Автор: Константин Одинцов (https://github.com/odintsovkos)
+Форк : Jackvote (https://github.com/jackvote/SDTelegramBot)
+Файл : api_service.py
+Свободное ПО по условиям GNU GPL v3. Полный текст лицензии - в файле LICENSE в корне репозитория.
 """
+
+
 
 
 import requests
 import logging
-
+from settings.bot_config import SD_API_URL
 
 def post_request_sd_api(endpoint, params, is_logging=True):
-    url = f"http://127.0.0.1:7860/sdapi/v1/{endpoint}"
+    url = f"{SD_API_URL}/sdapi/v1/{endpoint}"
 
     try:
         response = requests.post(url, json=params)
@@ -29,7 +26,7 @@ def post_request_sd_api(endpoint, params, is_logging=True):
 
 
 def get_request_sd_api(endpoint, is_logging=True):
-    url = f"http://127.0.0.1:7860/sdapi/v1/{endpoint}"
+    url = f"{SD_API_URL}/sdapi/v1/{endpoint}"
 
     try:
         response = requests.get(url)
