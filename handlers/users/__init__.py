@@ -3,4 +3,5 @@ from . import help
 from . import settings
 from . import hires_settings
 from . import menu
+from . import img2img
 from . import echo

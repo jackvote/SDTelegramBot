@@ -6,7 +6,6 @@ SDTelegramBot
 Свободное ПО по условиям GNU GPL v3. Полный текст лицензии - в файле LICENSE в корне репозитория.
 """
 
-
 import asyncio
 import time
 
@@ -27,15 +26,12 @@ from utils.misc_func import check_sd_path, restart_sd, is_sd_launched
 
 callback_data = None
 
-
 @dp.message_handler(commands=["settings"], state=SDStates.enter_prompt)
 async def settings_command_handler(message: Message):
     await message.bot.delete_message(message.chat.id, message.message_id)
-    if str(message.from_user.id) in ADMINS and settings_menu.inline_keyboard[-1][0].text != str_var.restart_sd:
-        settings_menu.add(InlineKeyboardButton(text=str_var.restart_sd, callback_data="restart_sd"))
-    await message.answer("⚙️ Настройки", reply_markup=settings_menu)
+    kb = settings_menu_for(str(message.from_user.id) in ADMINS)
+    await message.answer("⚙️ Настройки", reply_markup=kb)
     await SDStates.settings.set()
-
 
 @dp.message_handler(state=SDStates.settings_set_n_prompt, content_types=types.ContentTypes.TEXT)
 async def nprompt_button_handler(message: Message, state: FSMContext):
@@ -43,7 +39,6 @@ async def nprompt_button_handler(message: Message, state: FSMContext):
     await callback_data.message.edit_text("Negative Prompt установлен", reply_markup=gen_settings_menu)
     await message.bot.delete_message(message_id=message.message_id, chat_id=message.chat.id)
     await SDStates.gen_settings.set()
-
 
 @dp.message_handler(state=SDStates.settings_set_steps, content_types=types.ContentTypes.TEXT)
 async def steps_button_handler(message: Message):
@@ -279,6 +274,9 @@ async def reset_settings_handler(callback: types.CallbackQuery):
 
 @dp.callback_query_handler(state=SDStates.settings, text='restart_sd')
 async def restart_sd_handler(callback: types.CallbackQuery):
+    if str(callback.from_user.id) not in ADMINS:
+        await callback.answer("Недостаточно прав", show_alert=True)
+        return
     if check_sd_path():
         start_time = time.time()
         await callback.message.edit_text("Перезапуск SD начат...")

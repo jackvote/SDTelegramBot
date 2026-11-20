@@ -16,74 +16,67 @@ from aiogram.types import InlineKeyboardButton
 
 import settings.string_variables as str_var
 from keyboards.inline.inline_menu import settings_menu, main_menu, create_styles_keyboard, \
-    create_models_keyboard, create_loras_keyboard
+    create_models_keyboard, create_loras_keyboard, settings_menu_for
 from loader import dp
 from settings.bot_config import ADMINS
 from states.all_states import SDStates
+from utils import img2img_func
 from utils.db_services import db_service
 from utils.misc_func import change_style_db, change_lora_db, send_photo, change_model_callback, restarting_sd, \
-    is_sd_launched, clear_old_menu
+    is_sd_launched, clear_old_menu, message_parse
 from utils.waiting_bar import waiting_bar
 
 response_list = []
 callback_data = None
 
+
 @dp.message_handler(state=SDStates.enter_prompt, content_types=types.ContentTypes.TEXT)
 async def entered_prompt_handler(message: types.Message):
     prompt = message['text']
-    await db_service.db_set_last_prompt(message.from_user.id, prompt)
+    uid = message.from_user.id
+    img2img_func.clear_source(uid)
+    await db_service.db_set_last_prompt(uid, prompt)
     await message.bot.delete_message(message.chat.id, message.message_id)
-    await clear_old_menu(message.bot, message.chat.id, message.from_user.id)
+    await clear_old_menu(message.bot, message.chat.id, uid)
     if is_sd_launched():
-        await send_photo(message, message.from_user.id, prompt, response_list)
+        await send_photo(message, uid, prompt, response_list)
     else:
         await restarting_sd(message)
         await asyncio.sleep(2)
-        await send_photo(message, message.from_user.id, prompt, response_list)
+        await send_photo(message, uid, prompt, response_list)
+
+
+async def _repeat(callback, with_seed):
+    uid = callback.from_user.id
+    stored = await db_service.db_get_sd_setting(uid, 'sd_last_prompt') or ""
+    source = img2img_func.get_source(uid)
+    seed, prompt, denoise, prefix = await message_parse(stored, img2img=bool(source))
+    if with_seed and seed != -1:
+        text = prefix + f"{seed}&" + prompt
+    else:
+        text = prefix + prompt
+    await callback.bot.delete_message(callback.message.chat.id, callback.message.message_id)
+    await clear_old_menu(callback.bot, callback.message.chat.id, uid)
+    if prompt != "":
+        if is_sd_launched():
+            await send_photo(callback.message, uid, text, response_list, img2img=bool(source))
+        else:
+            await restarting_sd(callback)
+            await asyncio.sleep(2)
+            await send_photo(callback.message, uid, text, response_list, img2img=bool(source))
+    else:
+        await callback.message.answer("✏️ Введите Prompt", reply_markup=main_menu)
+
 
 @dp.callback_query_handler(state=SDStates.enter_prompt, text='repeat')
-async def current_settings(callback: types.CallbackQuery):
-    import logging
-    prompt = await db_service.db_get_sd_setting(callback.from_user.id, 'sd_last_prompt') or ""
-    logging.info(f"[repeat] Из базы прочитано: {repr(prompt)}")
-    
-    if prompt.find('&') != -1:
-        prompt = prompt[prompt.find('&') + 1:]
-    
-    logging.info(f"[repeat] После обрезки сида: {repr(prompt)}")
-    
-    await callback.bot.delete_message(callback.message.chat.id, callback.message.message_id)
-    await clear_old_menu(callback.bot, callback.message.chat.id, callback.from_user.id)
-    
-    if prompt != "":
-        logging.info(f"[repeat] Запускаю генерацию с промптом: {prompt[:50]}")
-        if is_sd_launched():
-            await send_photo(callback.message, callback.from_user.id, prompt, response_list)
-        else:
-            logging.info("[repeat] SD не запущена, перезапускаю...")
-            await restarting_sd(callback)
-            await asyncio.sleep(2)
-            await send_photo(callback.message, callback.from_user.id, prompt, response_list)
-    else:
-        logging.warning("[repeat] Промпт пустой после обрезки сида!")
-        await callback.message.answer("✏️ Введите Prompt", reply_markup=main_menu)
-        
+async def repeat_handler(callback: types.CallbackQuery):
+    await _repeat(callback, with_seed=False)
+
+
 @dp.callback_query_handler(state=SDStates.enter_prompt, text='repeat_with_seed')
-async def current_settings(callback: types.CallbackQuery):
-    prompt = await db_service.db_get_sd_setting(callback.from_user.id, 'sd_last_prompt') or ""
-    if prompt.find('&') != -1:
-        prompt = prompt[prompt.find('&') + 1:]
-    await callback.bot.delete_message(callback.message.chat.id, callback.message.message_id)
-    await clear_old_menu(callback.bot, callback.message.chat.id, callback.from_user.id)
-    if prompt != "":
-        if is_sd_launched():
-            await send_photo(callback.message, callback.from_user.id, prompt, response_list, with_seed=True)
-        else:
-            await restarting_sd(callback)
-            await asyncio.sleep(2)
-            await send_photo(callback.message, callback.from_user.id, prompt, response_list, with_seed=True)
-    else:
-        await callback.message.answer("✏️ Введите Prompt", reply_markup=main_menu)
+async def repeat_with_seed_handler(callback: types.CallbackQuery):
+    await _repeat(callback, with_seed=True)
+
 
 @dp.callback_query_handler(state=SDStates.enter_prompt, text='model')
 async def model_button_handler(callback: types.CallbackQuery, state: FSMContext):
@@ -113,7 +106,6 @@ async def change_model_handler(callback: types.CallbackQuery, state: FSMContext)
                                              reply_markup=styles_keyboard)
         else:
             await callback.answer()
-
     elif action == "next_page":
         if current_model_page < num_pages - 1:
             current_model_page += 1
@@ -123,7 +115,6 @@ async def change_model_handler(callback: types.CallbackQuery, state: FSMContext)
                                              reply_markup=styles_keyboard)
         else:
             await callback.answer()
-
     else:
         await db_service.db_set_sd_settings(callback.from_user.id, 'sd_model', action)
         await callback.message.edit_text("Загружаю модель в SD...")
@@ -135,19 +126,12 @@ async def change_model_handler(callback: types.CallbackQuery, state: FSMContext)
         await callback.message.edit_text(text=f"✅ Модель загружена", reply_markup=main_menu)
         response_list.clear()
         await SDStates.enter_prompt.set()
-    print(action)
-    print(current_model_page)
 
-
-@dp.callback_query_handler(state=SDStates.enter_prompt, text='styles')
-async def styles_button_handler(callback: types.CallbackQuery, state: FSMContext):
-    await state.update_data(current_page=0)
-    global callback_data
-    callback_data = callback
-    styles_keyboard = await create_styles_keyboard(callback.from_user.id, state=state)
-    await callback.message.edit_text(f"👇🏻 Выбери стили", reply_markup=styles_keyboard)
-    await SDStates.settings_set_style.set()
-
+@dp.callback_query_handler(state=SDStates.enter_prompt, text='settings')
+async def settings_button_handler(callback: types.CallbackQuery):
+    kb = settings_menu_for(str(callback.from_user.id) in ADMINS)
+    await callback.message.edit_text("⚙️ Настройки", reply_markup=kb)
+    await SDStates.settings.set()
 
 @dp.callback_query_handler(Text(startswith="style_"), state=SDStates.settings_set_style)
 async def change_style_handler(callback: types.CallbackQuery, state: FSMContext):
@@ -184,7 +168,7 @@ async def change_style_handler(callback: types.CallbackQuery, state: FSMContext)
 
 
 @dp.callback_query_handler(state=SDStates.enter_prompt, text='loras')
-async def current_settings(callback: types.CallbackQuery, state: FSMContext):
+async def loras_button_handler(callback: types.CallbackQuery, state: FSMContext):
     await state.update_data(current_page=0)
     global callback_data
     callback_data = callback
@@ -198,12 +182,11 @@ async def current_settings(callback: types.CallbackQuery, state: FSMContext):
 
 
 @dp.callback_query_handler(Text(startswith="lora_"), state=SDStates.settings_set_lora)
-async def current_settings(callback: types.CallbackQuery, state: FSMContext):
+async def change_lora_handler(callback: types.CallbackQuery, state: FSMContext):
     state_data = await state.get_data()
     current_page = state_data.get('current_page')
     num_pages = state_data.get('num_pages')
     action = callback.data[5:]
-
     if action == "confirm":
         await callback.message.edit_text("📝 LoRa установлены", reply_markup=main_menu)
         await SDStates.enter_prompt.set()
@@ -239,7 +222,7 @@ async def current_settings(callback: types.CallbackQuery, state: FSMContext):
 
 
 @dp.callback_query_handler(state=SDStates.enter_prompt, text='settings')
-async def current_settings(callback: types.CallbackQuery):
+async def settings_button_handler(callback: types.CallbackQuery):
     if str(callback.from_user.id) in ADMINS and settings_menu.inline_keyboard[-1][0].text != str_var.restart_sd:
         settings_menu.add(InlineKeyboardButton(text=str_var.restart_sd, callback_data="restart_sd"))
     await callback.message.edit_text("⚙️ Настройки", reply_markup=settings_menu)

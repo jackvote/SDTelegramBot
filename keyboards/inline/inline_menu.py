@@ -110,6 +110,13 @@ inline_cancel = InlineKeyboardMarkup(
     ]
 )
 
+img2img_cancel_menu = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [
+            InlineKeyboardButton(text="❌ Отмена", callback_data='img2img_cancel'),
+        ],
+    ]
+)
 
 async def text_slicer(list_items):
     for i in range(0, len(list_items)):
@@ -230,3 +237,13 @@ async def create_keyboard(list_name_items, list_callback_items, num_columns=2, n
                      InlineKeyboardButton(text=str_var.disable_all, callback_data=prefix + "disable_all"))
     keyboard.add(InlineKeyboardButton(text=str_var.cancel, callback_data="cancel"))
     return keyboard
+
+def settings_menu_for(is_admin):
+    """Клавиатура настроек: перезапуск SD в ряду со сбросом, только для админа."""
+    row = settings_menu.inline_keyboard[2]  # ряд со "Сброс настроек"
+    has = any(b.callback_data == 'restart_sd' for b in row)
+    if is_admin and not has:
+        row.append(InlineKeyboardButton(text=str_var.restart_sd, callback_data='restart_sd'))
+    elif not is_admin and has:
+        row[:] = [b for b in row if b.callback_data != 'restart_sd']
+    return settings_menu
