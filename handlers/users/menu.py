@@ -127,11 +127,14 @@ async def change_model_handler(callback: types.CallbackQuery, state: FSMContext)
         response_list.clear()
         await SDStates.enter_prompt.set()
 
-@dp.callback_query_handler(state=SDStates.enter_prompt, text='settings')
-async def settings_button_handler(callback: types.CallbackQuery):
-    kb = settings_menu_for(str(callback.from_user.id) in ADMINS)
-    await callback.message.edit_text("⚙️ Настройки", reply_markup=kb)
-    await SDStates.settings.set()
+@dp.callback_query_handler(state=SDStates.enter_prompt, text='styles')
+async def styles_button_handler(callback: types.CallbackQuery, state: FSMContext):
+    await state.update_data(current_page=0)
+    global callback_data
+    callback_data = callback
+    styles_keyboard = await create_styles_keyboard(callback.from_user.id, state=state)
+    await callback.message.edit_text("👇🏻 Выбери стили", reply_markup=styles_keyboard)
+    await SDStates.settings_set_style.set()
 
 @dp.callback_query_handler(Text(startswith="style_"), state=SDStates.settings_set_style)
 async def change_style_handler(callback: types.CallbackQuery, state: FSMContext):
