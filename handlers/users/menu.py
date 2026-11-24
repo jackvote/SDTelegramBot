@@ -55,7 +55,10 @@ async def _repeat(callback, with_seed):
         text = prefix + f"{seed}&" + prompt
     else:
         text = prefix + prompt
-    await callback.bot.delete_message(callback.message.chat.id, callback.message.message_id)
+    try:
+        await callback.bot.delete_message(callback.message.chat.id, callback.message.message_id)
+    except Exception:
+        pass
     await clear_old_menu(callback.bot, callback.message.chat.id, uid)
     if prompt != "":
         if is_sd_launched():
