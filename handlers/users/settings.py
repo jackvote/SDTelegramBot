@@ -16,8 +16,8 @@ from aiogram.types import Message, InlineKeyboardButton
 from aiogram.utils import markdown
 
 import settings.string_variables as str_var
-from keyboards.inline.inline_menu import settings_menu, gen_settings_menu, \
-    inline_cancel, hires_menu, main_menu, create_samplers_keyboard, create_wh_keyboard
+from keyboards.inline.inline_menu import settings_menu, gen_settings_menu, inline_cancel, \
+    hires_menu, main_menu, create_samplers_keyboard, create_wh_keyboard, settings_menu_for
 from loader import dp
 from settings.bot_config import ADMINS
 from states.all_states import SDStates
@@ -50,7 +50,6 @@ async def steps_button_handler(message: Message):
     else:
         await message.answer("Ошибка ввода", reply_markup=inline_cancel)
 
-
 @dp.message_handler(state=SDStates.settings_set_cfg_scale, content_types=types.ContentTypes.TEXT)
 async def cfg_scale_button_handler(message: Message):
     try:
@@ -60,7 +59,6 @@ async def cfg_scale_button_handler(message: Message):
         await SDStates.gen_settings.set()
     except ValueError:
         await message.answer("Ошибка ввода", reply_markup=inline_cancel)
-
 
 @dp.message_handler(state=SDStates.settings_set_batch_count, content_types=types.ContentTypes.TEXT)
 async def batch_count_button_handler(message: Message):
@@ -75,15 +73,12 @@ async def batch_count_button_handler(message: Message):
     else:
         await message.answer("Введите число", reply_markup=inline_cancel)
 
-
 @dp.callback_query_handler(state=SDStates.settings, text='current_settings')
 async def current_settings(callback: types.CallbackQuery):
     db_result = await db_service.db_get_sd_settings(callback.from_user.id)
     current_model = markdown.hbold("Model: ") + markdown.hitalic(db_result[1])
-    current_style = markdown.hbold("\nStyle:\n") + markdown.hitalic(db_result[2].replace('&', ', ')) if db_result[
-                                                                                                            2] != '' else ""
-    current_lora = markdown.hbold("\nLoRa:\n") + markdown.hitalic(db_result[3].replace('&', ', ')) if db_result[
-                                                                                                          3] != '' else ""
+    current_style = markdown.hbold("\nStyle:\n") + markdown.hitalic(db_result[2].replace('&', ', ')) if db_result[2] != '' else ""
+    current_lora = markdown.hbold("\nLoRa:\n") + markdown.hitalic(db_result[3].replace('&', ', ')) if db_result[3] != '' else ""
     current_n_prompt = markdown.hbold("\nNegative Prompt:\n") + markdown.hitalic(db_result[4])
     current_sampler = markdown.hbold("\nSampler: ") + markdown.hitalic(db_result[5])
     current_steps = markdown.hbold("\nSteps: ") + markdown.hitalic(db_result[6])
@@ -98,19 +93,21 @@ async def current_settings(callback: types.CallbackQuery):
                      markdown.hbold("\nHires Denoising Strength: ") + markdown.hitalic(db_result[13]) + \
                      markdown.hbold("\nHires Upscale by: ") + markdown.hitalic(db_result[14])
 
-    await callback.message.edit_text(current_settings + hires_settings if db_result[10] == 1 else current_settings,
-                                     reply_markup=settings_menu)
-
+    kb = settings_menu_for(str(callback.from_user.id) in ADMINS)
+    await callback.message.edit_text(
+        current_settings + hires_settings if db_result[10] == 1 else current_settings,
+        reply_markup=kb
+    )
 
 @dp.callback_query_handler(state=[SDStates.settings, SDStates.gen_settings], text='cancel')
 async def generation_settings(callback: types.CallbackQuery, state: FSMContext):
     if await state.get_state() == SDStates.gen_settings.state:
-        await callback.message.edit_text("⚙️ Настройки", reply_markup=settings_menu)
+        kb = settings_menu_for(str(callback.from_user.id) in ADMINS)
+        await callback.message.edit_text("⚙️ Настройки", reply_markup=kb)
         await SDStates.settings.set()
     elif await state.get_state() == SDStates.settings.state:
         await callback.message.edit_text("📖 Меню генерации", reply_markup=main_menu)
         await SDStates.enter_prompt.set()
-
 
 @dp.callback_query_handler(state=[SDStates.settings_set_steps,
                                   SDStates.settings_set_n_prompt,
@@ -122,18 +119,15 @@ async def generation_settings(callback: types.CallbackQuery):
     await callback.message.edit_text("⚙️ Настройки генерации", reply_markup=gen_settings_menu)
     await SDStates.gen_settings.set()
 
-
 @dp.callback_query_handler(state=SDStates.settings, text='gen_settings')
 async def generation_settings(callback: types.CallbackQuery):
     await callback.message.edit_text("⚙️ Настройки генерации", reply_markup=gen_settings_menu)
     await SDStates.gen_settings.set()
 
-
 @dp.callback_query_handler(state=SDStates.settings, text='hr_settings')
 async def generation_settings(callback: types.CallbackQuery):
     await callback.message.edit_text("⚙️ Настройки Hires Fix", reply_markup=hires_menu)
     await SDStates.hr_settings.set()
-
 
 @dp.callback_query_handler(state=SDStates.gen_settings, text='negative_prompt')
 async def n_prompt_button_handler(callback: types.CallbackQuery):
@@ -144,7 +138,6 @@ async def n_prompt_button_handler(callback: types.CallbackQuery):
         f"<b>Текущий Negative Prompt:</b>\n<code>{current_settings['sd_n_prompt']}</code>\n"
         f"✏️ Напиши Negative prompt", reply_markup=inline_cancel)
     await SDStates.settings_set_n_prompt.set()
-
 
 @dp.callback_query_handler(state=SDStates.gen_settings, text='sampler')
 async def sampler_button_handler(callback: types.CallbackQuery, state: FSMContext):
@@ -157,7 +150,6 @@ async def sampler_button_handler(callback: types.CallbackQuery, state: FSMContex
                                      f"✏️ Выбери Sampler", reply_markup=sample_keyboard)
     await SDStates.settings_set_sampler.set()
 
-
 @dp.callback_query_handler(state=SDStates.gen_settings, text='steps')
 async def steps_button_handler(callback: types.CallbackQuery):
     global callback_data
@@ -166,7 +158,6 @@ async def steps_button_handler(callback: types.CallbackQuery):
     await callback.message.edit_text(f"<b>Текущий Steps:</b>\n <i>{current_settings['sd_steps']}</i>\n"
                                      f"✏️ Введи количество шагов генерации", reply_markup=inline_cancel)
     await SDStates.settings_set_steps.set()
-
 
 @dp.callback_query_handler(state=SDStates.gen_settings, text='width_height')
 async def wh_button_handler(callback: types.CallbackQuery, state: FSMContext):
@@ -179,7 +170,6 @@ async def wh_button_handler(callback: types.CallbackQuery, state: FSMContext):
                                      f"✏️ Введи ширину и высоту, через 'x'", reply_markup=width_height_keyboard)
     await SDStates.settings_set_wh.set()
 
-
 @dp.callback_query_handler(state=SDStates.gen_settings, text='cfg_scale')
 async def cfg_scale_button_handler(callback: types.CallbackQuery):
     global callback_data
@@ -189,7 +179,6 @@ async def cfg_scale_button_handler(callback: types.CallbackQuery):
                                      f"✏️ Введи CFG Scale (дробное число, через точку)", reply_markup=inline_cancel)
     await SDStates.settings_set_cfg_scale.set()
 
-
 @dp.callback_query_handler(state=SDStates.gen_settings, text='batch_count')
 async def batch_count_button_handler(callback: types.CallbackQuery):
     global callback_data
@@ -198,7 +187,6 @@ async def batch_count_button_handler(callback: types.CallbackQuery):
     await callback.message.edit_text(f"<b>Текущий Batch count:</b>\n <i>{current_settings['sd_batch_count']}</i>\n"
                                      f"✏️ Введи Batch count (MAX 8)", reply_markup=inline_cancel)
     await SDStates.settings_set_batch_count.set()
-
 
 @dp.callback_query_handler(Text(startswith="wh_"), state=SDStates.settings_set_wh)
 async def change_wh_handler(callback: types.CallbackQuery, state: FSMContext):
@@ -232,7 +220,6 @@ async def change_wh_handler(callback: types.CallbackQuery, state: FSMContext):
         await callback.message.edit_text(f"<b>Width x Height задан</b>", reply_markup=gen_settings_menu)
         await SDStates.gen_settings.set()
 
-
 @dp.callback_query_handler(Text(startswith="sampler_"), state=SDStates.settings_set_sampler)
 async def change_sampler_handler(callback: types.CallbackQuery, state: FSMContext):
     state_data = await state.get_data()
@@ -265,12 +252,11 @@ async def change_sampler_handler(callback: types.CallbackQuery, state: FSMContex
         await callback.message.edit_text(f"<b>Sampler \"{action}\" задан</b>", reply_markup=gen_settings_menu)
         await SDStates.gen_settings.set()
 
-
 @dp.callback_query_handler(state=SDStates.settings, text='reset_settings')
 async def reset_settings_handler(callback: types.CallbackQuery):
     await db_service.db_update_default_settings(callback.from_user.id)
-    await callback.message.edit_text('🛠 Настройки сброшены', reply_markup=settings_menu)
-
+    kb = settings_menu_for(str(callback.from_user.id) in ADMINS)
+    await callback.message.edit_text('🛠 Настройки сброшены', reply_markup=kb)
 
 @dp.callback_query_handler(state=SDStates.settings, text='restart_sd')
 async def restart_sd_handler(callback: types.CallbackQuery):

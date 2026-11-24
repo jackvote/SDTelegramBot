@@ -6,14 +6,10 @@ SDTelegramBot
 Свободное ПО по условиям GNU GPL v3. Полный текст лицензии - в файле LICENSE в корне репозитория.
 """
 
-
-
-
 from aiogram import types
 from aiogram.dispatcher.filters import CommandHelp
 
 from loader import dp
-
 
 @dp.message_handler(CommandHelp(), state='*')
 async def bot_help(message: types.Message):
@@ -21,8 +17,7 @@ async def bot_help(message: types.Message):
             "/start - Начать генерировать",
             "/settings - Настройки генерации",
             "/help - Справка",
-            "Поблагодарить автора:",
-            "Qiwi: <code>+79803778005</code>",
-            "Карта МИР: <code>2200 1509 9863 3876</code>",)
+            "Поблагодарить автора форка:",
+            "Карта МИР: <code>2200 1103 5301 1670</code>",)
 
     await message.answer("\n".join(text))

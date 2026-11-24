@@ -29,7 +29,6 @@ from utils.waiting_bar import waiting_bar
 response_list = []
 callback_data = None
 
-
 @dp.message_handler(state=SDStates.enter_prompt, content_types=types.ContentTypes.TEXT)
 async def entered_prompt_handler(message: types.Message):
     prompt = message['text']
@@ -44,7 +43,6 @@ async def entered_prompt_handler(message: types.Message):
         await restarting_sd(message)
         await asyncio.sleep(2)
         await send_photo(message, uid, prompt, response_list)
-
 
 async def _repeat(callback, with_seed):
     uid = callback.from_user.id
@@ -70,16 +68,13 @@ async def _repeat(callback, with_seed):
     else:
         await callback.message.answer("✏️ Введите Prompt", reply_markup=main_menu)
 
-
 @dp.callback_query_handler(state=SDStates.enter_prompt, text='repeat')
 async def repeat_handler(callback: types.CallbackQuery):
     await _repeat(callback, with_seed=False)
 
-
 @dp.callback_query_handler(state=SDStates.enter_prompt, text='repeat_with_seed')
 async def repeat_with_seed_handler(callback: types.CallbackQuery):
     await _repeat(callback, with_seed=True)
-
 
 @dp.callback_query_handler(state=SDStates.enter_prompt, text='model')
 async def model_button_handler(callback: types.CallbackQuery, state: FSMContext):
@@ -91,7 +86,6 @@ async def model_button_handler(callback: types.CallbackQuery, state: FSMContext)
     await callback.message.edit_text(f"<b>Текущая модель:</b>\n<i>{sd_model}</i>\n"
                                      f"👇🏻 Выбери новую модель...", reply_markup=models_keyboard)
     await SDStates.settings_set_model.set()
-
 
 @dp.callback_query_handler(Text(startswith="model_"), state=SDStates.settings_set_model)
 async def change_model_handler(callback: types.CallbackQuery, state: FSMContext):
@@ -172,7 +166,6 @@ async def change_style_handler(callback: types.CallbackQuery, state: FSMContext)
         await callback.message.edit_text(f"Стиль {action} {'установлен' if is_changed else 'отключен'}",
                                          reply_markup=styles_keyboard)
 
-
 @dp.callback_query_handler(state=SDStates.enter_prompt, text='loras')
 async def loras_button_handler(callback: types.CallbackQuery, state: FSMContext):
     await state.update_data(current_page=0)
@@ -185,7 +178,6 @@ async def loras_button_handler(callback: types.CallbackQuery, state: FSMContext)
         return
     await callback.message.edit_text(f"👇🏻 Выбери LoRa", reply_markup=lora_keyboard)
     await SDStates.settings_set_lora.set()
-
 
 @dp.callback_query_handler(Text(startswith="lora_"), state=SDStates.settings_set_lora)
 async def change_lora_handler(callback: types.CallbackQuery, state: FSMContext):
@@ -226,14 +218,11 @@ async def change_lora_handler(callback: types.CallbackQuery, state: FSMContext):
         await callback.message.edit_text(f"LoRa {action} {'установлен' if is_changed else 'отключен'}",
                                          reply_markup=lora_keyboard)
 
-
 @dp.callback_query_handler(state=SDStates.enter_prompt, text='settings')
 async def settings_button_handler(callback: types.CallbackQuery):
-    if str(callback.from_user.id) in ADMINS and settings_menu.inline_keyboard[-1][0].text != str_var.restart_sd:
-        settings_menu.add(InlineKeyboardButton(text=str_var.restart_sd, callback_data="restart_sd"))
-    await callback.message.edit_text("⚙️ Настройки", reply_markup=settings_menu)
+    kb = settings_menu_for(str(callback.from_user.id) in ADMINS)
+    await callback.message.edit_text("⚙️ Настройки", reply_markup=kb)
     await SDStates.settings.set()
-
 
 @dp.callback_query_handler(state=[SDStates.settings_set_style,
                                   SDStates.settings_set_lora,
