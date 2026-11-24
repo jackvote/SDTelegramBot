@@ -14,7 +14,6 @@ import logging
 from aiogram import executor
 import time
 from settings.bot_config import is_wait_sd_launch, time_the_next_check_s, launch_sd_at_bot_started
-from loader import dp
 import middlewares, handlers
 from utils.db_services import db_service
 from utils.db_services.db_service import admins_and_users_initialization_in_db
@@ -22,6 +21,8 @@ from utils.misc_func import is_sd_launched, check_sd_path, start_sd_process
 from utils.notifier import users_and_admins_notify
 from utils.set_bot_commands import set_default_commands
 from states.all_states import SDStates
+from loader import dp, bot
+from utils import proxy_manager
 
 
 async def on_startup(dispatcher):
@@ -29,6 +30,7 @@ async def on_startup(dispatcher):
     await set_default_commands(dispatcher)
     await asyncio.sleep(4)
     await admins_and_users_initialization_in_db()
+    await proxy_manager.setup(bot)
 
     for row in await db_service.db_get_all_tg_id():
         tg_id = row['tg_id']
@@ -53,7 +55,7 @@ if __name__ == '__main__':
     if is_sd_launched():
         while True:
             try:
-                executor.start_polling(dp, on_startup=on_startup, timeout=45)
+                executor.start_polling(dp, skip_updates=True, on_startup=on_startup, timeout=45)
                 break
             except Exception as e:
                 logging.error(f"Ошибка подключения к Telegram: {e}")

@@ -71,6 +71,22 @@ class AnswerCallbackMiddleware(BaseMiddleware):
 
 class BridgeBot(Bot):
     """Без редиректов; тихие повторы при сбоях шлюза; устойчив к исчезнувшим сообщениям."""
+    def __init__(self, token, parse_mode=None, timeout=None, server=None, connector=None):
+        super().__init__(token=token, parse_mode=parse_mode, timeout=timeout, server=server)
+        if connector is not None:
+            self._connector = connector
+            self._session = None
+
+    async def switch_transport(self, connector, server):
+        try:
+            await self.close()
+        except Exception:
+            pass
+        self._connector = connector
+        self._server = server
+        self._session = None
+        logging.info(f"[proxy] транспорт переключён: server={server}, "
+                     f"connector={'proxy' if connector else 'нет'}")
     async def request(self, method, data=None, files=None, **kwargs):
         global _poll_fails
         kwargs.setdefault("allow_redirects", False)
@@ -114,6 +130,10 @@ class BridgeBot(Bot):
             logging.warning(f"Шлюз недоступен. Поллинг приостановлен на {pause} с")
             await asyncio.sleep(pause)
             return []
+        from utils import proxy_manager
+        mgr = proxy_manager.get()
+        if mgr is not None:
+            await mgr.handle_failure(self, NetworkError("Шлюз недоступен после попыток"))
         raise NetworkError("Шлюз недоступен после попыток")
 
 
