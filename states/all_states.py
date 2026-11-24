@@ -6,11 +6,7 @@ SDTelegramBot
 Свободное ПО по условиям GNU GPL v3. Полный текст лицензии - в файле LICENSE в корне репозитория.
 """
 
-
-
-
 from aiogram.dispatcher.filters.state import StatesGroup, State
-
 
 class SDStates(StatesGroup):
     waiting_for_authorization = State()
@@ -37,5 +33,3 @@ class SDStates(StatesGroup):
     hr_set_upscale_by = State()
 
     restart_sd = State()
-
-

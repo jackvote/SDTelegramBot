@@ -20,6 +20,9 @@ output_folder_img2img = 'outputs/img2img-users'
 adetailer_on = False
 # translate_on = True
 
+# Использовать batch_size=2 для чётного количества (выигрышно только на мощных GPU с запасом VRAM)
+use_batch_size_2 = False
+
 # --- img2img и веса LoRa (форк) ---
 # Denoise по умолчанию для img2img, если в промпте нет префикса N:
 img2img_denoising_strength = 0.3

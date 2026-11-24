@@ -9,7 +9,6 @@ from aiogram.bot.api import TelegramAPIServer
 
 FILE_METHOD = "__file"
 
-
 def build_bridge_server(url: str, key: str = "") -> TelegramAPIServer:
     url = (url or "").strip()
     if not url:

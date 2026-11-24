@@ -25,7 +25,7 @@ from loader import dp
 from settings.bot_config import sd_path, send_photo_without_compression
 from settings.sd_config import (save_files, output_folder, adetailer_on,
                                 img2img_denoising_strength, output_folder_img2img,
-                                lora_default_weight)
+                                lora_default_weight, use_batch_size_2)
 from utils import img2img_func
 from utils.db_services import db_service
 from utils.notifier import admin_notify, users_and_admins_notify
@@ -34,7 +34,6 @@ from utils.sd_api import api_service
 from utils.sd_api.api_service import get_request_sd_api
 
 sd_lock = asyncio.Lock()
-
 
 async def clear_old_menu(bot, chat_id, user_id):
     """Удаляет предыдущее сообщение главного меню, если его номер известен."""
@@ -46,7 +45,6 @@ async def clear_old_menu(bot, chat_id, user_id):
         except Exception:
             pass
 
-
 async def send_menu(message, user_id, text="📖 Меню генерации"):
     """Отправляет главное меню, предварительно удалив предыдущее."""
     await clear_old_menu(message.bot, message.chat.id, user_id)
@@ -54,12 +52,12 @@ async def send_menu(message, user_id, text="📖 Меню генерации"):
     await db_service.db_set_menu_msg_id(user_id, new_msg.message_id)
     return new_msg
 
-
 async def generate_image(tg_id: int, last_prompt, seed, init_b64=None, denoise=None, size=None):
     db_result = await db_service.db_get_sd_settings(tg_id)
     batch_count = db_result[9]
+    batch_count = db_result[9]
     batch_size = 1
-    if batch_count % 2 == 0:
+    if use_batch_size_2 and batch_count % 2 == 0:
         batch_size = 2
         batch_count //= 2
     params = {
@@ -118,7 +116,6 @@ async def generate_image(tg_id: int, last_prompt, seed, init_b64=None, denoise=N
     response = api_service.post_request_sd_api(endpoint, params)
     return response
 
-
 async def change_sd_model(tg_id: int):
     sd_model = api_service.get_request_sd_api("options").json()['sd_model_checkpoint']
     db_model = await db_service.db_get_sd_setting(tg_id, "sd_model")
@@ -127,11 +124,9 @@ async def change_sd_model(tg_id: int):
         api_service.post_request_sd_api("options", params)
     return db_model
 
-
 def is_sd_launched():
     response = get_request_sd_api("options", is_logging=False)
     return response is not None
-
 
 async def change_style_db(tg_id: int, entered_style):
     db_styles_list = await db_service.db_get_sd_setting(tg_id, 'sd_style')
@@ -149,7 +144,6 @@ async def change_style_db(tg_id: int, entered_style):
             await db_service.db_set_sd_settings(tg_id, 'sd_style', '&'.join(result))
             return False
 
-
 async def change_lora_db(tg_id: int, entered_lora):
     db_lora_list = await db_service.db_get_sd_setting(tg_id, 'sd_lora')
     if db_lora_list == "":
@@ -166,16 +160,13 @@ async def change_lora_db(tg_id: int, entered_lora):
             await db_service.db_set_sd_settings(tg_id, 'sd_lora', '&'.join(result))
             return False
 
-
 async def user_samplers(api_samplers, hide_user_samplers):
     return [x for x in api_samplers if x not in hide_user_samplers]
-
 
 def _weight(weights, i):
     if weights and i < len(weights) and weights[i] is not None:
         return weights[i]
     return lora_default_weight
-
 
 async def reformat_lora(lora, weights=None):
     if lora == "":
@@ -183,7 +174,6 @@ async def reformat_lora(lora, weights=None):
     names = lora.split('&')
     tags = (f'<lora:{n}:{_weight(weights, i):g}>' for i, n in enumerate(names))
     return ', '.join(tags) + ", "
-
 
 def build_lora_caption(lora, weights=None):
     if not lora:
@@ -193,7 +183,6 @@ def build_lora_caption(lora, weights=None):
         w = _weight(weights, i)
         parts.append(f"{n}:{w:g}" if w != lora_default_weight else n)
     return ', '.join(parts)
-
 
 def parse_lora_weights(prompt):
     """Первый тег <lora:0.2::-0,9> задаёт веса по позициям выбранных LoRa.
@@ -214,7 +203,6 @@ def parse_lora_weights(prompt):
     clean = (prompt[:m.start()] + prompt[m.end():]).strip()
     return weights, clean
 
-
 async def kill_sd_process():
     for proc in psutil.process_iter():
         if proc.name() == "python.exe" and proc.cmdline()[1] == "launch.py":
@@ -227,10 +215,8 @@ async def kill_sd_process():
             os.system(f"taskkill /Pid {pid} /f")
             await asyncio.sleep(1)
 
-
 def start_sd_process():
     os.system(f"cd {sd_path} && start webui-user.bat")
-
 
 def check_sd_path():
     if sd_path != "":
@@ -248,11 +234,9 @@ def check_sd_path():
         logging.warning("Путь к папке SD не указан в файле bot_config.py")
         return False
 
-
 async def restart_sd():
     await kill_sd_process()
     start_sd_process()
-
 
 def generate_image_callback(user_id, prompt, seed, response, init_b64=None, denoise=None, size=None):
     loop = asyncio.run(generate_image(tg_id=user_id, last_prompt=prompt, seed=seed,
@@ -260,12 +244,10 @@ def generate_image_callback(user_id, prompt, seed, response, init_b64=None, deno
     response.append(loop)
     return loop
 
-
 def change_model_callback(user_id, response):
     loop = asyncio.run(change_sd_model(user_id))
     response.append(loop)
     return loop
-
 
 async def send_photo(message, user_id, last_prompt, response_list=None, with_seed=False, img2img=False):
     # with_seed оставлен для совместимости сигнатуры; сид теперь вшивает меню.
@@ -292,7 +274,7 @@ async def send_photo(message, user_id, last_prompt, response_list=None, with_see
             await send_menu(message, user_id, text="Ошибка загрузки исходного изображения, повторите запрос.")
             await admin_notify(dp, msg="[ERROR] img2img: не удалось скачать исходник")
             return
-        
+
     await sd_lock.acquire()
     try:
         sd_model = await change_sd_model(user_id)
@@ -409,7 +391,6 @@ async def restarting_sd(message):
             await users_and_admins_notify(dp, f"✅ SD запущена - {int(current_time - start_time)}s.")
             break
         await asyncio.sleep(1)
-
 
 async def message_parse(message, img2img=False):
     """Разбор строки: [denoise:] [seed&] prompt.

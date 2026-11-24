@@ -6,7 +6,6 @@ SDTelegramBot
 Свободное ПО по условиям GNU GPL v3. Полный текст лицензии - в файле LICENSE в корне репозитория.
 """
 
-
 from aiogram.dispatcher import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -124,7 +123,6 @@ async def text_slicer(list_items):
             list_items[i] = list_items[i][:30]
     return list_items
 
-
 async def checked_selected_items(db_items_list, api_items_list):
     for i in range(0, len(api_items_list)):
         if api_items_list[i] in db_items_list:
@@ -133,7 +131,6 @@ async def checked_selected_items(db_items_list, api_items_list):
             api_items_list[i] = api_items_list[i]
     return api_items_list
 
-
 async def create_hr_upscalers_keyboard(state: FSMContext = None):
     api_result = api_service.get_request_sd_api('upscalers').json()
     api_result = [x['name'] for x in api_result]
@@ -141,7 +138,6 @@ async def create_hr_upscalers_keyboard(state: FSMContext = None):
     hr_upscalers_name_button = await text_slicer(api_result)
     hr_upscalers_keyboard = await create_keyboard(hr_upscalers_name_button, api_result, prefix="upscaler_", state=state)
     return hr_upscalers_keyboard
-
 
 async def create_samplers_keyboard(state: FSMContext = None):
     api_result = api_service.get_request_sd_api('samplers').json()
@@ -152,11 +148,9 @@ async def create_samplers_keyboard(state: FSMContext = None):
     sampler_keyboard = await create_keyboard(user_samplers_list, user_samplers_list, prefix="sampler_", state=state)
     return sampler_keyboard
 
-
 async def create_wh_keyboard(state: FSMContext = None):
     wh_keyboard = await create_keyboard(str_var.wh_buttons, str_var.wh_buttons, prefix="wh_", state=state)
     return wh_keyboard
-
 
 async def create_models_keyboard(state: FSMContext = None):
     result_models = api_service.get_request_sd_api('sd-models').json()
@@ -165,7 +159,6 @@ async def create_models_keyboard(state: FSMContext = None):
     models_name_button = await text_slicer(result_models)
     models_keyboard = await create_keyboard(models_name_button, result_models, prefix="model_", state=state)
     return models_keyboard
-
 
 async def create_styles_keyboard(tg_id, state: FSMContext = None):
     db_styles_list = await db_service.db_get_sd_setting(tg_id, 'sd_style')
@@ -180,7 +173,6 @@ async def create_styles_keyboard(tg_id, state: FSMContext = None):
         list_name_button = await text_slicer(sd_styles)
     style_keyboard = await create_keyboard(list_name_button, sd_styles, prefix="style_", state=state, isConfirmed=True)
     return style_keyboard
-
 
 async def create_loras_keyboard(tg_id, state: FSMContext = None):
     db_lora_list = await db_service.db_get_sd_setting(tg_id, 'sd_lora')
@@ -197,7 +189,6 @@ async def create_loras_keyboard(tg_id, state: FSMContext = None):
         list_name_button = await text_slicer(sd_lora)
     lora_keyboard = await create_keyboard(list_name_button, sd_lora, prefix="lora_", state=state, isConfirmed=True)
     return lora_keyboard
-
 
 async def create_keyboard(list_name_items, list_callback_items, num_columns=2, num_rows=7, prefix='',
                           state: FSMContext = None, isConfirmed=False):

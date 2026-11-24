@@ -6,9 +6,6 @@ SDTelegramBot
 Свободное ПО по условиям GNU GPL v3. Полный текст лицензии - в файле LICENSE в корне репозитория.
 """
 
-
-
-
 from environs import Env
 
 env = Env()

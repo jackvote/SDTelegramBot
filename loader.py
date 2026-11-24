@@ -43,11 +43,9 @@ _RETRY_MARKERS = (
     "server timeout",
 )
 
-
 def _is_retryable(e) -> bool:
     msg = str(e).lower()
     return any(m in msg for m in _RETRY_MARKERS)
-
 
 class DedupeMiddleware(BaseMiddleware):
     """Пропускает повторную доставку того же update (потерянные ответы 502)."""
@@ -59,7 +57,6 @@ class DedupeMiddleware(BaseMiddleware):
         if len(_seen_updates) > 2000:
             _seen_updates.clear()
 
-
 class AnswerCallbackMiddleware(BaseMiddleware):
     """Мгновенно подтверждает любое нажатие кнопки — спиннер гаснет сразу."""
     async def on_pre_process_callback_query(self, callback_query, data):
@@ -67,7 +64,6 @@ class AnswerCallbackMiddleware(BaseMiddleware):
             await callback_query.answer()
         except Exception:
             pass
-
 
 class BridgeBot(Bot):
     """Без редиректов; тихие повторы при сбоях шлюза; устойчив к исчезнувшим сообщениям."""
@@ -115,7 +111,6 @@ class BridgeBot(Bot):
             await asyncio.sleep(pause)
             return []
         raise NetworkError("Шлюз недоступен после попыток")
-
 
 bot = BridgeBot(
     token=bot_config.BOT_TOKEN,

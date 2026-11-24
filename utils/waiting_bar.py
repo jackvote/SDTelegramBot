@@ -6,16 +6,12 @@ SDTelegramBot
 Свободное ПО по условиям GNU GPL v3. Полный текст лицензии - в файле LICENSE в корне репозитория.
 """
 
-
-
-
 import asyncio
 import time
 
 import aiogram
 
 from loader import bot
-
 
 async def waiting_bar(chat_id, thread):
     list_items = ["🟩", "⬜️", "⬜️", "⬜️", "⬜️"]

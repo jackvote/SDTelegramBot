@@ -6,9 +6,6 @@ SDTelegramBot
 Свободное ПО по условиям GNU GPL v3. Полный текст лицензии - в файле LICENSE в корне репозитория.
 """
 
-
-
-
 import asyncio
 import logging
 from aiogram import executor
@@ -22,7 +19,6 @@ from utils.misc_func import is_sd_launched, check_sd_path, start_sd_process
 from utils.notifier import users_and_admins_notify
 from utils.set_bot_commands import set_default_commands
 from states.all_states import SDStates
-
 
 async def on_startup(dispatcher):
     await db_service.db_create_table()

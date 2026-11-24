@@ -20,7 +20,6 @@ from utils import img2img_func
 from utils.img2img_func import Img2ImgStates
 from utils.misc_func import clear_old_menu, send_menu, send_photo
 
-
 async def _strip_old_choice(bot, chat_id, user_id):
     old_id = img2img_func.get_choice_msg(user_id)
     if old_id:
@@ -29,7 +28,6 @@ async def _strip_old_choice(bot, chat_id, user_id):
         except Exception:
             pass
         img2img_func.clear_choice_msg(user_id)
-
 
 async def _clear_old_ask(bot, chat_id, user_id):
     old_id = img2img_func.get_ask_msg(user_id)
@@ -40,7 +38,6 @@ async def _clear_old_ask(bot, chat_id, user_id):
             pass
         img2img_func.clear_ask_msg(user_id)
 
-
 async def _after_choice(message, user_id, caption):
     if caption:
         await SDStates.enter_prompt.set()
@@ -50,7 +47,6 @@ async def _after_choice(message, user_id, caption):
         msg = await message.answer("🖼 Изображение принято. Введите промпт для обработки.",
                                    reply_markup=img2img_cancel_menu)
         img2img_func.set_ask_msg(user_id, msg.message_id)
-
 
 async def _ask_size(message, user_id, top, fit, caption):
     img2img_func.set_pending(user_id, top, fit, caption)
@@ -64,7 +60,6 @@ async def _ask_size(message, user_id, top, fit, caption):
     ])
     msg = await message.answer("Не проходит лимит.", reply_markup=kb)
     img2img_func.set_choice_msg(user_id, msg.message_id)
-
 
 @dp.message_handler(state=[SDStates.enter_prompt, Img2ImgStates.wait_prompt, Img2ImgStates.choose_size],
                     content_types=types.ContentTypes.PHOTO)
@@ -90,7 +85,6 @@ async def img2img_photo_handler(message: types.Message):
         await _after_choice(message, uid, caption)
     else:
         await _ask_size(message, uid, top, fit, caption)
-
 
 @dp.message_handler(state=[SDStates.enter_prompt, Img2ImgStates.wait_prompt, Img2ImgStates.choose_size],
                     content_types=types.ContentTypes.DOCUMENT)
@@ -141,7 +135,6 @@ async def img2img_document_handler(message: types.Message):
         img2img_func.set_source(uid, {'file_id': doc.file_id, 'width': tw, 'height': th, 'b64': b64})
         await _after_choice(message, uid, caption)
 
-
 @dp.callback_query_handler(state=Img2ImgStates.choose_size, text='img2img_size_original')
 async def img2img_size_original(callback: types.CallbackQuery):
     uid = callback.from_user.id
@@ -158,7 +151,6 @@ async def img2img_size_original(callback: types.CallbackQuery):
         pass
     img2img_func.clear_choice_msg(uid)
     await _after_choice(callback.message, uid, caption)
-
 
 @dp.callback_query_handler(state=Img2ImgStates.choose_size, text='img2img_size_smaller')
 async def img2img_size_smaller(callback: types.CallbackQuery):
@@ -177,7 +169,6 @@ async def img2img_size_smaller(callback: types.CallbackQuery):
     img2img_func.clear_choice_msg(uid)
     await _after_choice(callback.message, uid, caption)
 
-
 @dp.callback_query_handler(state=Img2ImgStates.choose_size, text='img2img_size_cancel')
 async def img2img_size_cancel(callback: types.CallbackQuery):
     uid = callback.from_user.id
@@ -191,7 +182,6 @@ async def img2img_size_cancel(callback: types.CallbackQuery):
     await SDStates.enter_prompt.set()
     await send_menu(callback.message, uid)
 
-
 @dp.message_handler(state=Img2ImgStates.wait_prompt, content_types=types.ContentTypes.TEXT)
 async def img2img_prompt_handler(message: types.Message):
     uid = message.from_user.id
@@ -202,7 +192,6 @@ async def img2img_prompt_handler(message: types.Message):
         pass
     await SDStates.enter_prompt.set()
     await send_photo(message, uid, message.text, img2img=True)
-
 
 @dp.callback_query_handler(state=Img2ImgStates.wait_prompt, text='img2img_cancel')
 async def img2img_cancel_handler(callback: types.CallbackQuery):

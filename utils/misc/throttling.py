@@ -6,9 +6,6 @@ SDTelegramBot
 Свободное ПО по условиям GNU GPL v3. Полный текст лицензии - в файле LICENSE в корне репозитория.
 """
 
-
-
-
 def rate_limit(limit: int, key=None):
     """
     Decorator for configuring rate limit and key in different functions.

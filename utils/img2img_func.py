@@ -14,70 +14,54 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 
 from settings.sd_config import img2img_max_size, img2img_max_mb
 
-
 class Img2ImgStates(StatesGroup):
     wait_prompt = State()
     choose_size = State()
-
 
 _sources = {}
 _pending = {}
 _choice_msg = {}
 _ask_msg = {}
 
-
 def set_source(user_id, entry):
     _sources[user_id] = entry
-
 
 def get_source(user_id):
     return _sources.get(user_id)
 
-
 def clear_source(user_id):
     _sources.pop(user_id, None)
-
 
 def set_pending(user_id, top, fit, caption):
     _pending[user_id] = {'top': top, 'fit': fit, 'caption': caption}
 
-
 def get_pending(user_id):
     return _pending.get(user_id)
-
 
 def clear_pending(user_id):
     _pending.pop(user_id, None)
 
-
 def set_choice_msg(user_id, message_id):
     _choice_msg[user_id] = message_id
-
 
 def get_choice_msg(user_id):
     return _choice_msg.get(user_id)
 
-
 def clear_choice_msg(user_id):
     _choice_msg.pop(user_id, None)
-
 
 def set_ask_msg(user_id, message_id):
     _ask_msg[user_id] = message_id
 
-
 def get_ask_msg(user_id):
     return _ask_msg.get(user_id)
-
 
 def clear_ask_msg(user_id):
     _ask_msg.pop(user_id, None)
 
-
 def check_limits(width, height):
     """Порог молчаливой обработки: длинная сторона не больше img2img_max_size."""
     return max(width, height) <= img2img_max_size
-
 
 def fit_size(width, height):
     """Вписать пропорции в порог (для даунскейла силами SD), кратно 8."""
@@ -87,10 +71,8 @@ def fit_size(width, height):
     th = max(8, int(height * scale) // 8 * 8)
     return tw, th
 
-
 def round_size(width, height):
     return max(8, (width // 8) * 8), max(8, (height // 8) * 8)
-
 
 def pick_variants(photo_list):
     """(top, fit) из лестницы Telegram; fit - наибольшая проходящая порог ступень."""
@@ -102,7 +84,6 @@ def pick_variants(photo_list):
             fit_entry = {'file_id': p.file_id, 'width': p.width, 'height': p.height, 'b64': None}
             break
     return top_entry, fit_entry
-
 
 def parse_image_size(data):
     """Разрешение из заголовков JPEG/PNG/WebP/GIF/BMP без сторонних библиотек."""
@@ -146,7 +127,6 @@ def parse_image_size(data):
         logging.warning(f"[img2img] разбор заголовка не удался: {e}")
     return None
 
-
 async def download_bytes(bot, file_id):
     try:
         buf = io.BytesIO()
@@ -156,7 +136,6 @@ async def download_bytes(bot, file_id):
     except Exception as e:
         logging.error(f"[img2img] Не удалось скачать файл {file_id}: {e}")
         return None
-
 
 async def download_b64(bot, file_id):
     data = await download_bytes(bot, file_id)

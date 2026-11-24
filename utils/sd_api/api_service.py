@@ -6,9 +6,6 @@ SDTelegramBot
 Свободное ПО по условиям GNU GPL v3. Полный текст лицензии - в файле LICENSE в корне репозитория.
 """
 
-
-
-
 import requests
 import logging
 from settings.bot_config import SD_API_URL
@@ -24,7 +21,6 @@ def post_request_sd_api(endpoint, params, is_logging=True):
             logging.critical("Ошибка запроса к SD API. Проверь SD")
         return None
 
-
 def get_request_sd_api(endpoint, is_logging=True):
     url = f"{SD_API_URL}/sdapi/v1/{endpoint}"
 
@@ -36,14 +32,11 @@ def get_request_sd_api(endpoint, is_logging=True):
             logging.critical("Ошибка запроса к SD API. Проверь SD")
         return None
 
-
 def get_models_sd_api():
     return get_request_sd_api("sd-models").json()
 
-
 def get_hr_upscaler_sd_api():
     return get_request_sd_api("upscalers").json()
-
 
 def get_image_seed(image):
     png_payload = {
@@ -54,4 +47,3 @@ def get_image_seed(image):
     for j in range(len(image_info) - 1, 0, -1):
         if image_info[j].find("Seed:") != -1:
             return image_info[j][6:]
-

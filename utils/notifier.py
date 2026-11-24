@@ -6,15 +6,11 @@ SDTelegramBot
 Свободное ПО по условиям GNU GPL v3. Полный текст лицензии - в файле LICENSE в корне репозитория.
 """
 
-
-
-
 import logging
 
 from aiogram import Dispatcher
 
 from settings.bot_config import ADMINS, USERS
-
 
 async def admin_notify(dp: Dispatcher, msg: str):
     for admin in ADMINS:
@@ -24,7 +20,6 @@ async def admin_notify(dp: Dispatcher, msg: str):
         except Exception as err:
             logging.exception(err)
 
-
 async def user_notify(dp: Dispatcher, msg: str):
     for user in USERS:
         try:
@@ -32,7 +27,6 @@ async def user_notify(dp: Dispatcher, msg: str):
 
         except Exception as err:
             logging.exception(err)
-
 
 async def users_and_admins_notify(dp: Dispatcher, msg: str):
     await user_notify(dp, msg)

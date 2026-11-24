@@ -6,9 +6,6 @@ SDTelegramBot
 Свободное ПО по условиям GNU GPL v3. Полный текст лицензии - в файле LICENSE в корне репозитория.
 """
 
-
-
-
 import asyncio
 
 from aiogram import types, Dispatcher
@@ -16,7 +13,6 @@ from aiogram.dispatcher import DEFAULT_RATE_LIMIT
 from aiogram.dispatcher.handler import CancelHandler, current_handler
 from aiogram.dispatcher.middlewares import BaseMiddleware
 from aiogram.utils.exceptions import Throttled
-
 
 class ThrottlingMiddleware(BaseMiddleware):
     """

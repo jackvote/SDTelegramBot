@@ -13,7 +13,6 @@ POLL_INTERVAL = 0.5       # опрос локального SD
 RETRY_ATTEMPTS = 3        # сколько раз повторять при обрыве
 RETRY_PAUSE = 2.0         # пауза между повторами, секунд
 
-
 async def progress_bar(chat_id, target, header=""):
     """target: поток threading.Thread ИЛИ callable, возвращающий True по завершении."""
     is_done = target if callable(target) else (lambda: not target.is_alive())

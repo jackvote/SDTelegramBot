@@ -6,9 +6,6 @@ SDTelegramBot
 Свободное ПО по условиям GNU GPL v3. Полный текст лицензии - в файле LICENSE в корне репозитория.
 """
 
-
-
-
 from aiogram.dispatcher.filters.builtin import CommandStart
 from aiogram.types import Message
 
@@ -17,7 +14,6 @@ from loader import dp
 from settings.bot_config import ADMINS
 from states.all_states import SDStates
 from utils.db_services import db_service
-
 
 @dp.message_handler(CommandStart(), state="*")
 async def bot_start(message: Message):

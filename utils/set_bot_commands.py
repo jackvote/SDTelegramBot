@@ -6,11 +6,7 @@ SDTelegramBot
 Свободное ПО по условиям GNU GPL v3. Полный текст лицензии - в файле LICENSE в корне репозитория.
 """
 
-
-
-
 from aiogram import types
-
 
 async def set_default_commands(dp):
     await dp.bot.set_my_commands(
