@@ -47,3 +47,17 @@ def get_image_seed(image):
     for j in range(len(image_info) - 1, 0, -1):
         if image_info[j].find("Seed:") != -1:
             return image_info[j][6:]
+
+_adetailer_cache = None
+
+def adetailer_available():
+    """Есть ли расширение ADetailer в SD. Кэш до перезапуска бота."""
+    global _adetailer_cache
+    if _adetailer_cache is None:
+        try:
+            resp = get_request_sd_api("script-info", is_logging=False)
+            data = resp.json() if resp is not None else []
+            _adetailer_cache = any(str(s.get("title")) == "ADetailer" for s in data)
+        except Exception:
+            _adetailer_cache = False
+    return _adetailer_cache

@@ -17,7 +17,8 @@ from aiogram.utils import markdown
 
 import settings.string_variables as str_var
 from keyboards.inline.inline_menu import settings_menu, gen_settings_menu, inline_cancel, \
-    hires_menu, main_menu, create_samplers_keyboard, create_wh_keyboard, settings_menu_for
+    main_menu, create_samplers_keyboard, create_wh_keyboard, settings_menu_for, \
+    create_hires_menu, hires_header
 from loader import dp
 from settings.bot_config import ADMINS
 from states.all_states import SDStates
@@ -126,7 +127,8 @@ async def generation_settings(callback: types.CallbackQuery):
 
 @dp.callback_query_handler(state=SDStates.settings, text='hr_settings')
 async def generation_settings(callback: types.CallbackQuery):
-    await callback.message.edit_text("⚙️ Настройки Hires Fix", reply_markup=hires_menu)
+    kb = await create_hires_menu(callback.from_user.id)
+    await callback.message.edit_text(hires_header(), reply_markup=kb)
     await SDStates.hr_settings.set()
 
 @dp.callback_query_handler(state=SDStates.gen_settings, text='negative_prompt')

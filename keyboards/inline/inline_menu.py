@@ -84,23 +84,6 @@ gen_settings_menu = InlineKeyboardMarkup(
     ],
 )
 
-hires_menu = InlineKeyboardMarkup(
-    inline_keyboard=[
-        [
-            InlineKeyboardButton(text=str_var.hr_on_off, callback_data='hr_on_off'),
-        ],
-        [
-            InlineKeyboardButton(text=str_var.hr_upscaler, callback_data='hr_upscaler'),
-            InlineKeyboardButton(text=str_var.hr_steps, callback_data='hr_steps'),
-            InlineKeyboardButton(text=str_var.hr_denoising_strength, callback_data='hr_den_strength'),
-            InlineKeyboardButton(text=str_var.hr_upscale_by, callback_data='hr_upscale_by'),
-        ],
-        [
-            InlineKeyboardButton(text=str_var.cancel, callback_data='cancel'),
-        ],
-    ],
-)
-
 inline_cancel = InlineKeyboardMarkup(
     inline_keyboard=[
         [
@@ -238,3 +221,28 @@ def settings_menu_for(is_admin):
     elif not is_admin and has:
         row[:] = [b for b in row if b.callback_data != 'restart_sd']
     return settings_menu
+
+async def create_hires_menu(tg_id):
+    """Меню Hires: параметры сверху, переключатель снизу.
+    Надпись на переключателе = действие: включить (если 0) / отключить (если 1)."""
+    enable_hr = await db_service.db_get_sd_setting(tg_id, 'sd_hr_on_off')
+    toggle = "HD отключить" if int(enable_hr) == 1 else "HD включить"
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text=str_var.hr_upscaler, callback_data='hr_upscaler'),
+            InlineKeyboardButton(text=str_var.hr_steps, callback_data='hr_steps'),
+            InlineKeyboardButton(text=str_var.hr_denoising_strength, callback_data='hr_den_strength'),
+            InlineKeyboardButton(text=str_var.hr_upscale_by, callback_data='hr_upscale_by'),
+        ],
+        [
+            InlineKeyboardButton(text=toggle, callback_data='hr_on_off'),
+        ],
+        [
+            InlineKeyboardButton(text=str_var.cancel, callback_data='cancel'),
+        ],
+    ])
+
+def hires_header():
+    """Заголовок раздела: добавляет ADetailer, если расширение найдено."""
+    return ("⚙️ Настройки Hires Fix и ADetailer" if api_service.adetailer_available()
+            else "⚙️ Настройки Hires Fix")
