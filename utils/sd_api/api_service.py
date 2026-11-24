@@ -57,7 +57,16 @@ def adetailer_available():
         try:
             resp = get_request_sd_api("script-info", is_logging=False)
             data = resp.json() if resp is not None else []
-            _adetailer_cache = any(str(s.get("title")) == "ADetailer" for s in data)
-        except Exception:
+            
+            # Ищем "adetailer" в title или name, игнорируя регистр
+            _adetailer_cache = any(
+                "adetailer" in str(s.get("title", "")).lower() or 
+                "adetailer" in str(s.get("name", "")).lower() 
+                for s in data
+            )
+            logging.info(f"[ADetailer] Проверка script-info: всего скриптов {len(data)}, ADetailer найден: {_adetailer_cache}")
+            
+        except Exception as e:
             _adetailer_cache = False
+            logging.warning(f"[ADetailer] Ошибка проверки script-info: {e}")
     return _adetailer_cache
