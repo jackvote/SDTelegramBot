@@ -42,7 +42,8 @@ echo venv %PYTHON%
 goto :install_requirements
 
 :install_requirements
-%PYTHON% -m pip install -r requirements.txt
+::%PYTHON% -m pip install -r requirements.txt
+%PYTHON% -m pip install -q --disable-pip-version-check -r requirements.txt
 echo Requirements Install Successfully
 
 :launch

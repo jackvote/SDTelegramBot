@@ -70,3 +70,18 @@ def adetailer_available():
             _adetailer_cache = False
             logging.warning(f"[ADetailer] Ошибка проверки script-info: {e}")
     return _adetailer_cache
+
+_dynamic_prompts_cache = None
+
+def dynamic_prompts_available():
+    """Есть ли расширение sd-dynamic-prompts в SD. Кэш до перезапуска бота."""
+    global _dynamic_prompts_cache
+    if _dynamic_prompts_cache is None:
+        try:
+            resp = get_request_sd_api("script-info", is_logging=False)
+            data = resp.json() if resp is not None else []
+            _dynamic_prompts_cache = any(
+                str(s.get("name", "")).lower().startswith("dynamic prompts") for s in data)
+        except Exception:
+            _dynamic_prompts_cache = False
+    return _dynamic_prompts_cache

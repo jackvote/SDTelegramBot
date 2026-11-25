@@ -16,6 +16,7 @@ import os
 import re
 import threading
 import time
+import html
 
 import settings.sd_config as sd_config
 import psutil as psutil
@@ -258,6 +259,7 @@ async def send_photo(message, user_id, last_prompt, response_list=None, with_see
         return
 
     source = img2img_func.get_source(user_id) if img2img else None
+    db_result = await db_service.db_get_sd_settings(user_id)
     if img2img and source is None:
         img2img = False
     init_b64 = None
@@ -275,6 +277,11 @@ async def send_photo(message, user_id, last_prompt, response_list=None, with_see
         sd_sampler = await db_service.db_get_sd_setting(user_id, 'sd_sampler')
         seed, prompt, denoise, prefix = await message_parse(last_prompt, img2img=img2img)
         weights, prompt_clean = parse_lora_weights(prompt)
+
+        # Проверка наличия расширения при обнаружении синтаксиса DP
+        if has_dynamic_prompt_syntax(prompt_clean) and not api_service.dynamic_prompts_available():
+            logging.info("[dynamic_prompts] Запрос к Dynamic prompts, а расширение не установлено.")
+        
         if img2img:
             denoise = denoise if denoise is not None else img2img_denoising_strength
             size = img2img_func.round_size(source['width'], source['height'])
@@ -294,7 +301,6 @@ async def send_photo(message, user_id, last_prompt, response_list=None, with_see
         thread_generate_image.join()
     finally:
         sd_lock.release()
-
     style = await db_service.db_get_sd_setting(user_id, 'sd_style')
     caption = f"<b>Positive prompt:</b>\n<code>{prompt_clean}</code>\n" \
               f"<b>Model: </b><i>{sd_model}</i>\n" \
@@ -303,7 +309,12 @@ async def send_photo(message, user_id, last_prompt, response_list=None, with_see
         caption += f"\n<b>Styles: </b><i>{style.replace('&', ', ')}</i>"
     if lora != '':
         caption += f"\n<b>LoRa: </b><i>{build_lora_caption(lora, weights)}</i>"
-
+    mask = int(db_result[10] or 0)
+    if sd_config.bit_on(mask, sd_config.BIT_AD):
+        model_bits = sd_config.ad_model_bits(mask)
+        if model_bits:
+            model_names = [sd_config.ad_menu[i][0] for i in model_bits]
+            caption += f"\n<b>ADetailer:</b> {', '.join(model_names)}"
     if results and isinstance(results[0], dict) and "images" in results[0] and "error" not in results[0]:
         logging.info(f"[gen] Завершено успешно. Отправка {len(results[0]['images'])} изображений: user={user_id}")
 
@@ -352,8 +363,12 @@ async def send_photo(message, user_id, last_prompt, response_list=None, with_see
             except Exception as err:
                 logging.warning(f"[gen] Отправка фото не прошла (попытка {attempt + 1}/3): {err}")
                 await asyncio.sleep(2)
-
         if delivered:
+            if has_dynamic_prompt_syntax(prompt_clean):
+                try:
+                    await _send_dynamic_variants(message, prompt_clean, results[0]['images'])
+                except Exception as e:
+                    logging.warning(f"[dynamic_prompts] не удалось отправить варианты: {e}")
             await send_menu(message, user_id)
         else:
             logging.error(f"[gen] Не удалось отправить фото после 3 попыток: user={user_id}")
@@ -406,3 +421,127 @@ async def message_parse(message, img2img=False):
         if seed_part.lstrip('-').isdigit():
             return int(seed_part), prompt, denoise, prefix
     return -1, text, denoise, prefix
+
+# Детект синтаксиса dynamic prompts: хотя бы одна парная группа {…|…} без вложенных скобок.
+# Одиночные } и неохватывающие { } игнорируются. Wildcards не детектим.
+_RE_DYNAMIC = re.compile(r'(?<!\{)\{[^{}]*\|[^{}]*\}(?!\})')
+
+def has_dynamic_prompt_syntax(prompt: str) -> bool:
+    """Есть ли в промпте хотя бы одна парная группа {a|b} без вложенных скобок."""
+    return bool(_RE_DYNAMIC.search(prompt))
+
+def _png_parameters(image_b64: str):
+    """tEXt/iTXt-чанк 'parameters' из PNG, локально, без сетевых вызовов."""
+    try:
+        data = base64.b64decode(image_b64.split(",", 1)[0])
+        if data[:8] != b'\x89PNG\r\n\x1a\n':
+            return None
+        i, n = 8, len(data)
+        while i + 8 <= n:
+            length = int.from_bytes(data[i:i + 4], 'big')
+            ctype = data[i + 4:i + 8]
+            body = data[i + 8:i + 8 + length]
+            if ctype == b'tEXt':
+                kw, _, text = body.partition(b'\x00')
+                if kw == b'parameters':
+                    return text.decode('utf-8', 'replace')
+            elif ctype == b'iTXt':
+                kw, _, rest = body.partition(b'\x00')
+                if kw == b'parameters':
+                    rest = rest[2:]
+                    _, _, rest = rest.partition(b'\x00')
+                    _, _, text = rest.partition(b'\x00')
+                    return text.decode('utf-8', 'replace')
+            elif ctype == b'IEND':
+                break
+            i += 12 + length
+    except Exception:
+        return None
+    return None
+
+def image_resolved_prompt(image_b64: str):
+    """Реальный промпт конкретной картинки (PNG tEXt или JPEG EXIF)."""
+    info = _png_parameters(image_b64)
+    if not info:
+        # JPEG (и прочие форматы): читаем через SD png-info, он понимает EXIF
+        resp = api_service.post_request_sd_api(
+            "png-info", {"image": "data:image/png;base64," + image_b64}, is_logging=False)
+        if isinstance(resp, dict):
+            info = resp.get("info")
+    if not info:
+        return None
+    prompt = info.split("\nNegative prompt:")[0].split("\nSteps:")[0]
+    return prompt.strip() or None
+
+def _template_to_regex(template: str) -> str:
+    """Шаблон -> регулярка с гибкими пробелами; пунктуация приклеивается к соседям."""
+    atoms = []
+    wildcard_idx = []
+    i = 0
+    for m in re.finditer(r'\{([^{}]+)\}|__\w+__', template):
+        seg = template[i:m.start()]
+        tokens = seg.split()
+        if tokens:
+            if not seg[0].isspace() and atoms:      # кусок начался вплотную -> слить с предыдущим атомом
+                atoms[-1] += re.escape(tokens[0])
+                tokens = tokens[1:]
+            atoms.extend(re.escape(t) for t in tokens)
+        tight_end = bool(seg) and not seg[-1].isspace()
+
+        if m.group(0).startswith('{'):
+            opts = [re.escape(o.strip()) for o in m.group(1).split('|')]
+            atom = '(?:' + '|'.join(opts) + ')'
+        else:
+            atom = r'.+?'
+            wildcard_idx.append(len(atoms))
+        if tight_end and atoms:                     # кусок кончился вплотную -> слить атом в последний
+            atoms[-1] += atom
+        else:
+            atoms.append(atom)
+        i = m.end()
+
+    seg = template[i:]
+    tokens = seg.split()
+    if tokens:
+        if not seg[0].isspace() and atoms:
+            atoms[-1] += re.escape(tokens[0])
+            tokens = tokens[1:]
+        atoms.extend(re.escape(t) for t in tokens)
+
+    for idx in wildcard_idx:
+        if idx == len(atoms) - 1:
+            atoms[idx] = r'.+'
+    return r'\s+'.join(atoms)
+
+def extract_dynamic_body(template: str, resolved: str):
+    """Вытаскивает только тело шаблона из полного промпта (без LoRA-префикса и стилей)."""
+    if not resolved:
+        return None
+    try:
+        m = re.search(_template_to_regex(template), resolved)
+        if m:
+            return m.group(0)
+    except Exception:
+        pass
+    return None
+
+async def _send_dynamic_variants(message, template, images):
+    resolved = [image_resolved_prompt(img) for img in images]
+    first = resolved[0] if resolved else None
+    if not first or _RE_DYNAMIC.search(first):
+        # расширение не резолвило шаблон или метаданные не читались — молча пропускаем
+        logging.info("[dynamic_prompts] варианты не отправлены: шаблон не резолвлен или метаданные недоступны")
+        return
+    items = []
+    for idx, raw in enumerate(resolved, start=1):
+        body = extract_dynamic_body(template, raw)
+        items.append(f"{idx}. <code>{html.escape(body)}</code>" if body
+                     else f"{idx}. <i>промпт не прочитан</i>")
+    chunk = "<b>Динамичные варианты промптов:</b>\n"
+    for it in items:
+        if len(chunk) + len(it) + 1 > 3800:
+            await message.answer(chunk)
+            chunk = ""
+        chunk += it + "\n"
+    if chunk.strip():
+        await message.answer(chunk)
