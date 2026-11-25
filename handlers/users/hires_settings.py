@@ -18,22 +18,21 @@ from loader import dp
 from settings.bot_config import ADMINS
 from states.all_states import SDStates
 from utils.db_services import db_service
+from utils.sd_api import api_service
+import settings.sd_config as sd_config
 
 callback_data = None
-
 
 @dp.message_handler(state=SDStates.hr_settings, content_types=types.ContentTypes.TEXT)
 async def hr_text_swallow(message: types.Message):
     # В разделе Hires текст не ожидается — гасим, чтобы не ушло в echo.
     pass
 
-
 @dp.callback_query_handler(state=SDStates.hr_settings, text='cancel')
 async def hr_cancel_to_settings(callback: types.CallbackQuery):
     kb = settings_menu_for(str(callback.from_user.id) in ADMINS)
     await callback.message.edit_text("⚙️ Настройки", reply_markup=kb)
     await SDStates.settings.set()
-
 
 @dp.callback_query_handler(state=[SDStates.hr_change_upscaler,
                                   SDStates.settings_set_wh,
@@ -45,17 +44,43 @@ async def hr_cancel_to_hires(callback: types.CallbackQuery):
     await callback.message.edit_text(hires_header(), reply_markup=kb)
     await SDStates.hr_settings.set()
 
-
 @dp.callback_query_handler(state=SDStates.hr_settings, text='hr_on_off')
 async def hr_toggle(callback: types.CallbackQuery):
-    """Мгновенный тумблер Hires: флип 0/1 в БД и перерисовка меню, без ввода."""
     uid = callback.from_user.id
-    cur = await db_service.db_get_sd_setting(uid, 'sd_hr_on_off')
-    new = 0 if int(cur) == 1 else 1
-    await db_service.db_set_sd_settings(uid, 'sd_hr_on_off', new)
+    mask = int(await db_service.db_get_sd_setting(uid, 'sd_hr_on_off') or 0)
+    mask = sd_config.bit_toggle(mask, sd_config.BIT_HD)
+    await db_service.db_set_sd_settings(uid, 'sd_hr_on_off', mask)
     kb = await create_hires_menu(uid)
     await callback.message.edit_text(hires_header(), reply_markup=kb)
 
+@dp.callback_query_handler(state=SDStates.hr_settings, text='ad_toggle')
+async def ad_toggle(callback: types.CallbackQuery):
+    if not api_service.adetailer_available():
+        await callback.answer("ADetailer не установлен", show_alert=True)
+        return
+    uid = callback.from_user.id
+    mask = int(await db_service.db_get_sd_setting(uid, 'sd_hr_on_off') or 0)
+    mask = sd_config.bit_toggle(mask, sd_config.BIT_AD)
+    mask = sd_config.ad_ensure_default_model(mask)
+    await db_service.db_set_sd_settings(uid, 'sd_hr_on_off', mask)
+    kb = await create_hires_menu(uid)
+    await callback.message.edit_text(hires_header(), reply_markup=kb)
+
+@dp.callback_query_handler(Text(startswith="ad_model_"), state=SDStates.hr_settings)
+async def ad_model_toggle(callback: types.CallbackQuery):
+    if not api_service.adetailer_available():
+        await callback.answer("ADetailer не установлен", show_alert=True)
+        return
+    idx = int(callback.data[len("ad_model_"):])
+    if idx >= len(sd_config.BIT_MODELS):
+        await callback.answer()
+        return
+    uid = callback.from_user.id
+    mask = int(await db_service.db_get_sd_setting(uid, 'sd_hr_on_off') or 0)
+    mask = sd_config.bit_toggle(mask, sd_config.BIT_MODELS[idx])
+    await db_service.db_set_sd_settings(uid, 'sd_hr_on_off', mask)
+    kb = await create_hires_menu(uid)
+    await callback.message.edit_text(hires_header(), reply_markup=kb)
 
 @dp.message_handler(state=SDStates.hr_set_steps, content_types=types.ContentTypes.TEXT)
 async def hr_steps_input(message: Message):
@@ -68,7 +93,6 @@ async def hr_steps_input(message: Message):
     else:
         await message.answer("Ошибка ввода", reply_markup=keyboards.cancel)
 
-
 @dp.message_handler(state=SDStates.hr_set_denoising_strength, content_types=types.ContentTypes.TEXT)
 async def hr_den_input(message: Message):
     try:
@@ -80,7 +104,6 @@ async def hr_den_input(message: Message):
     except ValueError:
         await message.answer("Ошибка ввода", reply_markup=keyboards.cancel)
 
-
 @dp.message_handler(state=SDStates.hr_set_upscale_by, content_types=types.ContentTypes.TEXT)
 async def hr_scale_input(message: Message):
     if message.text.isdigit():
@@ -91,7 +114,6 @@ async def hr_scale_input(message: Message):
         await SDStates.hr_settings.set()
     else:
         await message.answer("Ошибка ввода", reply_markup=keyboards.cancel)
-
 
 @dp.callback_query_handler(state=SDStates.hr_settings, text='hr_upscaler')
 async def hr_upscaler_open(callback: types.CallbackQuery, state: FSMContext):
@@ -105,7 +127,6 @@ async def hr_upscaler_open(callback: types.CallbackQuery, state: FSMContext):
                                      f"✏️ Выбери Upscaler", reply_markup=upscaler_keyboard)
     await SDStates.hr_change_upscaler.set()
 
-
 @dp.callback_query_handler(state=SDStates.hr_settings, text='hr_steps')
 async def hr_steps_open(callback: types.CallbackQuery):
     global callback_data
@@ -115,7 +136,6 @@ async def hr_steps_open(callback: types.CallbackQuery):
                                      f"{current_settings['sd_hr_steps']}\n"
                                      f"✏️ Введи значение Steps", reply_markup=inline_cancel)
     await SDStates.hr_set_steps.set()
-
 
 @dp.callback_query_handler(state=SDStates.hr_settings, text='hr_den_strength')
 async def hr_den_open(callback: types.CallbackQuery):
@@ -127,7 +147,6 @@ async def hr_den_open(callback: types.CallbackQuery):
                                      f"✏️ Введи значение Denoising strength", reply_markup=inline_cancel)
     await SDStates.hr_set_denoising_strength.set()
 
-
 @dp.callback_query_handler(state=SDStates.hr_settings, text='hr_upscale_by')
 async def hr_scale_open(callback: types.CallbackQuery):
     global callback_data
@@ -137,7 +156,6 @@ async def hr_scale_open(callback: types.CallbackQuery):
                                      f"{current_settings['sd_hr_upscale_by']}\n"
                                      f"✏️ Введи значение Upscale by", reply_markup=inline_cancel)
     await SDStates.hr_set_upscale_by.set()
-
 
 @dp.callback_query_handler(Text(startswith="upscaler_"), state=SDStates.hr_change_upscaler)
 async def hr_upscaler_select(callback: types.CallbackQuery, state: FSMContext):

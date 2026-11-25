@@ -9,6 +9,7 @@ SDTelegramBot
 from aiogram.dispatcher import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
+import settings.sd_config as sd_config
 import settings.string_variables as str_var
 from utils.db_services import db_service
 from utils.misc_func import user_samplers
@@ -223,11 +224,10 @@ def settings_menu_for(is_admin):
     return settings_menu
 
 async def create_hires_menu(tg_id):
-    """Меню Hires: параметры сверху, переключатель снизу.
-    Надпись на переключателе = действие: включить (если 0) / отключить (если 1)."""
-    enable_hr = await db_service.db_get_sd_setting(tg_id, 'sd_hr_on_off')
-    toggle = "HD отключить" if int(enable_hr) == 1 else "HD включить"
-    return InlineKeyboardMarkup(inline_keyboard=[
+    """Меню Hires+ADetailer. Блок ADetailer скрывается, если расширения нет."""
+    mask = int(await db_service.db_get_sd_setting(tg_id, 'sd_hr_on_off') or 0)
+    hd_label = "HD отключить" if sd_config.bit_on(mask, sd_config.BIT_HD) else "HD включить"
+    rows = [
         [
             InlineKeyboardButton(text=str_var.hr_upscaler, callback_data='hr_upscaler'),
             InlineKeyboardButton(text=str_var.hr_steps, callback_data='hr_steps'),
@@ -235,12 +235,20 @@ async def create_hires_menu(tg_id):
             InlineKeyboardButton(text=str_var.hr_upscale_by, callback_data='hr_upscale_by'),
         ],
         [
-            InlineKeyboardButton(text=toggle, callback_data='hr_on_off'),
+            InlineKeyboardButton(text=hd_label, callback_data='hr_on_off'),
         ],
-        [
-            InlineKeyboardButton(text=str_var.cancel, callback_data='cancel'),
-        ],
-    ])
+    ]
+    if api_service.adetailer_available():
+        model_row = []
+        for i, (label, _model) in enumerate(sd_config.ad_menu):
+            emoji = "🟢 " if sd_config.bit_on(mask, sd_config.BIT_MODELS[i]) else "🔴 "
+            model_row.append(InlineKeyboardButton(text=emoji + label, callback_data=f"ad_model_{i}"))
+        rows.append(model_row)
+        ad_label = ("ADetailer отключить" if sd_config.bit_on(mask, sd_config.BIT_AD)
+                    else "ADetailer включить")
+        rows.append([InlineKeyboardButton(text=ad_label, callback_data='ad_toggle')])
+    rows.append([InlineKeyboardButton(text=str_var.cancel, callback_data='cancel')])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 def hires_header():
     """Заголовок раздела: добавляет ADetailer, если расширение найдено."""

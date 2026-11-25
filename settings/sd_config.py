@@ -6,8 +6,6 @@ SDTelegramBot
 Свободное ПО по условиям GNU GPL v3. Полный текст лицензии - в файле LICENSE в корне репозитория.
 """
 
-from utils.sd_api import api_service
-
 # True сохраняет сгенерированные файлы в папку "outputs/txt2img-images"
 save_files = False
 
@@ -15,10 +13,6 @@ save_files = False
 output_folder = 'outputs/txt2img-users'
 # Папка вывода img2img при save_files=True
 output_folder_img2img = 'outputs/img2img-users'
-
-# Включение дополнения ADetailer
-adetailer_on = False
-# translate_on = True
 
 # Использовать batch_size=2 для чётного количества (выигрышно только на мощных GPU с запасом VRAM)
 use_batch_size_2 = False
@@ -43,8 +37,62 @@ img2img_max_size = 1280
 # Максимальный размер файла img2img в МБ, если не удалось определить разрешение в пикселях
 img2img_max_mb = 8
 
+# --- ADetailer (форк) ---
+# Кнопки моделей: [подпись, имя файла]. Порядок = порядок кнопок,
+# битов маски и слотов ADetailer.
+ad_menu = [
+    ["Лицо", "face_yolov9c.pt"],
+    ["Руки", "hand_yolov9c.pt"],
+    ["Тело", "person_yolov8m-seg.pt"],
+]
+
+# Общий набор параметров инпейнта ADetailer (ad_model подставляется отдельно).
+# ВАЖНО: ad_steps / ad_inpaint_width / ad_inpaint_height работают только
+# вместе с флагами ad_use_*; без них значения игнорируются.
+ad_common = {
+    "ad_prompt": "",
+    "ad_negative_prompt": "",
+    "ad_confidence": 0.3,
+    "ad_mask_blur": 4,
+    "ad_denoising_strength": 0.4,
+    "ad_use_inpaint_width_height": True,
+    "ad_inpaint_width": 512,
+    "ad_inpaint_height": 512,
+    "ad_use_steps": True,
+    "ad_steps": 18,
+    "ad_use_sampler": True,
+    "ad_sampler": "Euler a",
+    # 0 = инпейнтить все найденные объекты; 1-2 = только top-k (быстрее)
+    "ad_mask_k": 0,
+}
+
+# Биты маски в поле sd_hr_on_off: бит0=HD, бит1=AD, бит2/3/4=модели
+BIT_HD = 1
+BIT_AD = 2
+BIT_MODELS = (4, 8, 16)
+
+
+def bit_on(mask, bit):
+    return (mask & bit) != 0
+
+
+def bit_toggle(mask, bit):
+    return mask ^ bit
+
+
+def ad_model_bits(mask):
+    return [i for i, b in enumerate(BIT_MODELS) if mask & b]
+
+
+def ad_ensure_default_model(mask):
+    """Если AD включён, но ни одна модель не выбрана — включаем первую."""
+    if bit_on(mask, BIT_AD) and not ad_model_bits(mask):
+        mask |= BIT_MODELS[0]
+    return mask
+
 # Параметры по умолчанию
 def get_default_params(tg_id):
+    from utils.sd_api import api_service
     model = api_service.get_models_sd_api()
     upscalers = api_service.get_hr_upscaler_sd_api()
     params = {"user_id": tg_id,

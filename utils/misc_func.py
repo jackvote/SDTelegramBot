@@ -17,13 +17,14 @@ import re
 import threading
 import time
 
+import settings.sd_config as sd_config
 import psutil as psutil
 from aiogram import types
 
 from keyboards.inline import inline_menu
 from loader import dp
 from settings.bot_config import sd_path, send_photo_without_compression
-from settings.sd_config import (save_files, output_folder, adetailer_on,
+from settings.sd_config import (save_files, output_folder,
                                 img2img_denoising_strength, output_folder_img2img,
                                 lora_default_weight, use_batch_size_2)
 from utils import img2img_func
@@ -73,7 +74,7 @@ async def generate_image(tg_id: int, last_prompt, seed, init_b64=None, denoise=N
         "batch_size": batch_size,
         "save_images": 'true' if save_files else 'false',
         "seed": seed,
-        "enable_hr": db_result[10],
+        "enable_hr": 1 if sd_config.bit_on(int(db_result[10] or 0), sd_config.BIT_HD) else 0,
         "hr_upscaler": db_result[11],
         "hr_second_pass_steps": db_result[12],
         "denoising_strength": db_result[13],
@@ -90,27 +91,19 @@ async def generate_image(tg_id: int, last_prompt, seed, init_b64=None, denoise=N
         key = "outdir_img2img_samples" if init_b64 else "outdir_txt2img_samples"
         folder = output_folder_img2img if init_b64 else output_folder
         api_service.post_request_sd_api("options", {key: f"{folder}"})
-    if adetailer_on:
-        params.update({ "alwayson_scripts": {
-            "ADetailer": {
-                "args": [
-                    {
-                        "ad_model": "face_yolov8n.pt",
-                        "ad_prompt": "",
-                        "ad_negative_prompt": "",
-                        "ad_confidence": 0.3,
-                        "ad_mask_blur": 4,
-                        "ad_denoising_strength": 0.4,
-                        "ad_inpaint_width": 512,
-                        "ad_inpaint_height": 512,
-                        "ad_steps": 28,
-                    },
-                    {
-                        "ad_model": "None",
-                    }
-                ]
-            }
-        }})
+    mask = int(db_result[10] or 0)
+    if sd_config.bit_on(mask, sd_config.BIT_AD) and api_service.adetailer_available():
+        idxs = sd_config.ad_model_bits(mask) or [0]
+        args = []
+        for slot in range(3):
+            if slot < len(idxs):
+                entry = dict(sd_config.ad_common)
+                entry["ad_model"] = sd_config.ad_menu[idxs[slot]][1]
+                args.append(entry)
+            else:
+                args.append({"ad_model": "None"})
+        params["alwayson_scripts"] = {"ADetailer": {"args": args}}
+        
     logging.info(f"[SD] Передан в SD ({endpoint}): user={tg_id}, {params['width']}x{params['height']}, "
                  f"steps={params['steps']}, n_iter={params['n_iter']}, batch={params['batch_size']}")
     response = api_service.post_request_sd_api(endpoint, params)
