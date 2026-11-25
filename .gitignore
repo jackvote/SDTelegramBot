@@ -142,4 +142,4 @@ dmypy.json
 .idea/*
 .env
 *.db
-.gitignore
+.gitignorea.bat 
