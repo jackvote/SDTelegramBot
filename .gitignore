@@ -1,14 +1,3 @@
-# Локальные вспомогательные скрипты и файлы
-commit.txt
-pull_updates.bat
-push_to_github.bat
-sd.bat
-update.php
-update_headers.php
-change_about.txt
-full_diff_with_original.txt
-full_diff.txt
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
