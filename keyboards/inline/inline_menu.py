@@ -15,8 +15,7 @@ from utils.db_services import db_service
 from utils.sd_api import api_service
 
 main_menu = InlineKeyboardMarkup(
-    inline_keyboard=
-    [
+    inline_keyboard=[
         [
             InlineKeyboardButton(text=str_var.repeat, callback_data='repeat'),
             InlineKeyboardButton(text=str_var.repeat_with_seed, callback_data='repeat_with_seed'),
@@ -33,8 +32,7 @@ main_menu = InlineKeyboardMarkup(
 )
 
 main_menu_none_repeat = InlineKeyboardMarkup(
-    inline_keyboard=
-    [
+    inline_keyboard=[
         [
             InlineKeyboardButton(text=str_var.model, callback_data='model'),
             InlineKeyboardButton(text=str_var.styles, callback_data='styles'),
@@ -47,8 +45,7 @@ main_menu_none_repeat = InlineKeyboardMarkup(
 )
 
 settings_menu = InlineKeyboardMarkup(
-    inline_keyboard=
-    [
+    inline_keyboard=[
         [
             InlineKeyboardButton(text=str_var.current_settings, callback_data='current_settings'),
         ],
@@ -66,8 +63,7 @@ settings_menu = InlineKeyboardMarkup(
 )
 
 gen_settings_menu = InlineKeyboardMarkup(
-    inline_keyboard=
-    [
+    inline_keyboard=[
         [
             InlineKeyboardButton(text=str_var.negative_prompt, callback_data='negative_prompt'),
             InlineKeyboardButton(text=str_var.sampler, callback_data='sampler'),
@@ -117,8 +113,7 @@ async def checked_selected_items(db_items_list, api_items_list):
 
 
 def _paginate(n_items, num_rows=7, base_cols=2):
-    """Единый расчёт колонок/элементов на страницу/числа страниц.
-    При >4 страницах переходим на 3 колонки и пересчитываем (без off-by-one)."""
+    """Единый расчёт колонок/элементов на страницу/числа страниц."""
     cols = base_cols
     per = cols * num_rows
     pages = max(1, -(-n_items // per))
@@ -130,45 +125,54 @@ def _paginate(n_items, num_rows=7, base_cols=2):
 
 
 async def create_hr_upscalers_keyboard(state: FSMContext = None):
-    api_result = api_service.get_request_sd_api('upscalers').json()
-    api_result = [x['name'] for x in api_result]
-    api_result.sort()
-    hr_upscalers_name_button = await text_slicer(api_result)
-    hr_upscalers_keyboard = await create_keyboard(hr_upscalers_name_button, api_result, prefix="upscaler_", state=state)
-    return hr_upscalers_keyboard
+    data = await api_service.get_sd_api_json('upscalers', is_logging=False)
+    if data is None:
+        return None
+    names = sorted([x['name'] for x in data])
+    display = await text_slicer(names)
+    return await create_keyboard(display, names, prefix="upscaler_", state=state)
 
 
 async def create_samplers_keyboard(state: FSMContext = None):
-    api_result = api_service.get_request_sd_api('samplers').json()
-    api_result = [x['name'] for x in api_result]
-    api_result.sort()
-    hide_sampler = api_service.get_request_sd_api('options').json()['hide_samplers']
-    user_samplers_list = await user_samplers(api_result, hide_sampler)
-    sampler_keyboard = await create_keyboard(user_samplers_list, user_samplers_list, prefix="sampler_", state=state)
-    return sampler_keyboard
+    data = await api_service.get_sd_api_json('samplers', is_logging=False)
+    if data is None:
+        return None
+    names = sorted([x['name'] for x in data])
+    options = await api_service.get_sd_api_json('options', is_logging=False)
+    hide = (options or {}).get('hide_samplers', [])
+    names = await user_samplers(names, hide)
+    display = await text_slicer(names)
+    return await create_keyboard(display, names, prefix="sampler_", state=state)
 
 
 async def create_wh_keyboard(state: FSMContext = None):
-    wh_keyboard = await create_keyboard(str_var.wh_buttons, str_var.wh_buttons, prefix="wh_", state=state)
-    return wh_keyboard
+    return await create_keyboard(str_var.wh_buttons, str_var.wh_buttons,
+                                 prefix="wh_", state=state)
 
 
 async def create_models_keyboard(state: FSMContext = None):
-    result_models = api_service.get_request_sd_api('sd-models').json()
-    result_models = [x['model_name'] for x in result_models]
-    result_models.sort()
-    models_name_button = await text_slicer(result_models)
-    models_keyboard = await create_keyboard(models_name_button, result_models, prefix="model_", state=state)
-    return models_keyboard
+    sd = await state.get_data() if state else {}
+    cache = sd.get('models_cache')
+    if cache is None:
+        data = await api_service.get_sd_api_json('sd-models', is_logging=False)
+        if data is None:
+            return None
+        cache = sorted([x['model_name'] for x in data])
+        if state:
+            await state.update_data(models_cache=cache)
+    display = await text_slicer(cache)
+    cbs = [f"i_{i}" for i in range(len(cache))]
+    return await create_keyboard(display, cbs, prefix="model_", state=state)
 
 
 async def _selection_keyboard(tg_id, state, endpoint, db_field, prefix):
-    """Общая фабрика для стилей/LoRa: кэш списка в state, index-callbacks, фильтр, старт на активной странице."""
+    """Общая фабрика для стилей/LoRa: кэш в state, index-callbacks, фильтр."""
     sd = await state.get_data() if state else {}
     raw = sd.get('sel_items')
     if raw is None:
-        resp = api_service.get_request_sd_api(endpoint)
-        data = resp.json() if resp is not None else []
+        data = await api_service.get_sd_api_json(endpoint, is_logging=False)
+        if data is None:
+            return None
         raw = [x.get('name', '') for x in data]
         raw = [n for n in raw if n and n.strip()]
         if state:
@@ -181,7 +185,6 @@ async def _selection_keyboard(tg_id, state, endpoint, db_field, prefix):
     db_set = set(db_list)
     is_filtered = sd.get('is_filtered', False)
 
-    # Старт на странице первого активного элемента (только при входе, current_page=None)
     if sd.get('current_page') is None:
         first = next((i for i, n in enumerate(raw) if n in db_set), -1)
         _cols, per, _pages = _paginate(len(raw))
@@ -232,8 +235,8 @@ async def create_keyboard(list_name_items, list_callback_items, num_columns=2, n
         row = []
         for j in range(cols):
             if i + j < len(list_name_items):
-                row.append(InlineKeyboardButton(text=list_name_items[i + j],
-                                                callback_data=prefix + list_callback_items[i + j]))
+                cb = prefix + list_callback_items[i + j]
+                row.append(InlineKeyboardButton(text=list_name_items[i + j], callback_data=cb))
         if row:
             keyboard.row(*row)
 
@@ -267,14 +270,14 @@ async def create_keyboard(list_name_items, list_callback_items, num_columns=2, n
 
 
 def settings_menu_for(is_admin):
-    """Клавиатура настроек: перезапуск SD в ряду со сбросом, только для админа."""
-    row = settings_menu.inline_keyboard[2]  # ряд со "Сброс настроек"
-    has = any(b.callback_data == 'restart_sd' for b in row)
-    if is_admin and not has:
-        row.append(InlineKeyboardButton(text=str_var.restart_sd, callback_data='restart_sd'))
-    elif not is_admin and has:
-        row[:] = [b for b in row if b.callback_data != 'restart_sd']
-    return settings_menu
+    """Не мутирует глобальный settings_menu. Строит новую клавиатуру из шаблона,
+    добавляя кнопку перезапуска SD в ряд со сбросом только для админа."""
+    rows = [list(row) for row in settings_menu.inline_keyboard]
+    target_row = rows[2]
+    target_row[:] = [b for b in target_row if b.callback_data != 'restart_sd']
+    if is_admin:
+        target_row.append(InlineKeyboardButton(text=str_var.restart_sd, callback_data='restart_sd'))
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 async def create_hires_menu(tg_id):
@@ -307,5 +310,5 @@ async def create_hires_menu(tg_id):
 
 def hires_header():
     """Заголовок раздела: добавляет ADetailer, если расширение найдено."""
-    return ("Настройки Hires Fix и ADetailer" if api_service.adetailer_available()
-            else "Настройки Hires Fix")
+    return ("⚙️ Настройки Hires Fix и ADetailer" if api_service.adetailer_available()
+            else "⚙️ Настройки Hires Fix")

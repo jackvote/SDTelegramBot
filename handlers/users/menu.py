@@ -7,6 +7,7 @@ SDTelegramBot
 """
 
 import asyncio
+import logging
 import threading
 
 from aiogram import types
@@ -23,12 +24,26 @@ from states.all_states import SDStates
 from utils import img2img_func
 from utils.db_services import db_service
 from utils.misc_func import change_style_db, change_lora_db, send_photo, change_model_callback, restarting_sd, \
-    is_sd_launched, clear_old_menu, message_parse, send_menu
+    is_sd_launched, clear_old_menu, message_parse
+from utils.notifier import admin_notify
 from utils.waiting_bar import waiting_bar
-
 
 response_list = []
 callback_data = None
+
+logging.info("[boot] menu.py: nav-fix v3 (goto-ветки с return, i_-callbacks)")
+
+async def _sd_unavailable(callback, what: str):
+    """Общая обработка недоступности SD: лог, уведомление админа, сообщение пользователю."""
+    logging.error(f"[SD API] {what}: SD недоступен, user={callback.from_user.id}")
+    await admin_notify(dp, msg=f"[ERROR] SD API недоступен при открытии меню: {what}")
+    try:
+        await callback.message.edit_text(
+            "⛔️ SD не отвечает. Информация уже передана администратору.",
+            reply_markup=main_menu)
+    except Exception:
+        pass
+    await SDStates.enter_prompt.set()
 
 
 @dp.message_handler(state=SDStates.enter_prompt, content_types=types.ContentTypes.TEXT)
@@ -87,62 +102,77 @@ async def model_button_handler(callback: types.CallbackQuery, state: FSMContext)
     global callback_data
     callback_data = callback
     sd_model = await db_service.db_get_sd_setting(callback.from_user.id, "sd_model")
-    await state.update_data(current_page=0)
-    models_keyboard = await create_models_keyboard(state=state)
+    await state.update_data(current_page=0, models_cache=None)
+    kb = await create_models_keyboard(state=state)
+    if kb is None:
+        await _sd_unavailable(callback, "модели")
+        return
     await callback.message.edit_text(f"<b>Текущая модель:</b>\n<i>{sd_model}</i>\n"
-                                     f"👇🏻 Выбери новую модель...", reply_markup=models_keyboard)
+                                     f"👇🏻 Выбери новую модель...", reply_markup=kb)
     await SDStates.settings_set_model.set()
 
 
 @dp.callback_query_handler(Text(startswith="model_"), state=SDStates.settings_set_model)
 async def change_model_handler(callback: types.CallbackQuery, state: FSMContext):
-    await callback.message.delete_reply_markup()
-    state_data = await state.get_data()
-    current_model_page = state_data.get('current_page')
-    num_pages = state_data.get('num_pages')
+    sd = await state.get_data()
+    cache = sd.get('models_cache') or []
     action = callback.data[6:]
-    if action == "prev_page":
-        if current_model_page > 0:
-            current_model_page -= 1
-            await state.update_data(current_page=current_model_page)
-            styles_keyboard = await create_models_keyboard(state=state)
-            await callback.message.edit_text(f"Страница {current_model_page + 1} из {num_pages}",
-                                             reply_markup=styles_keyboard)
-        else:
-            await callback.answer()
-    elif action == "next_page":
-        if current_model_page < num_pages - 1:
-            current_model_page += 1
-            await state.update_data(current_page=current_model_page)
-            styles_keyboard = await create_models_keyboard(state=state)
-            await callback.message.edit_text(f"Страница {current_model_page + 1} из {num_pages}",
-                                             reply_markup=styles_keyboard)
-        else:
-            await callback.answer()
-    else:
-        await db_service.db_set_sd_settings(callback.from_user.id, 'sd_model', action)
-        await callback.message.edit_text("Загружаю модель в SD...")
-        thread_change_model = threading.Thread(target=change_model_callback, args=(callback.from_user.id, response_list))
-        thread_change_model.start()
-        chat_id, message_id = await waiting_bar(callback.message.chat.id, thread_change_model)
-        thread_change_model.join()
-        await callback.bot.delete_message(chat_id=chat_id, message_id=message_id)
-        await callback.message.edit_text(text=f"✅ Модель загружена", reply_markup=main_menu)
-        response_list.clear()
-        await SDStates.enter_prompt.set()
+    num_pages = sd.get('num_pages', 1)
+    cur = sd.get('current_page', 0)
 
+    if action in ("prev_page", "next_page", "goto_first", "goto_last"):
+        if action == "prev_page":
+            cur = cur - 1 if cur > 0 else num_pages - 1
+        elif action == "next_page":
+            cur = cur + 1 if cur < num_pages - 1 else 0
+        elif action == "goto_first":
+            cur = 0
+        else:
+            cur = num_pages - 1
+        await state.update_data(current_page=cur)
+        kb = await create_models_keyboard(state=state)
+        if kb is None:
+            await _sd_unavailable(callback, "модели")
+            return
+        await callback.message.edit_text(f"Страница {cur + 1} из {num_pages}", reply_markup=kb)
+        await callback.answer()
+        return
+
+    name = None
+    if action.startswith("i_"):
+        try:
+            idx = int(action[2:])
+        except ValueError:
+            idx = -1
+        if 0 <= idx < len(cache):
+            name = cache[idx]
+    if name is None:
+        logging.warning(f"[model] нераспознанный callback {callback.data!r}, игнорирую")
+        await callback.answer()
+        return
+
+
+    await db_service.db_set_sd_settings(callback.from_user.id, 'sd_model', name)
+    await callback.message.edit_text("Загружаю модель в SD...")
+    thread_change_model = threading.Thread(target=change_model_callback, args=(callback.from_user.id, response_list))
+    thread_change_model.start()
+    chat_id, message_id = await waiting_bar(callback.message.chat.id, thread_change_model)
+    thread_change_model.join()
+    await callback.bot.delete_message(chat_id=chat_id, message_id=message_id)
+    await callback.message.edit_text(text=f"✅ Модель загружена", reply_markup=main_menu)
+    response_list.clear()
+    await SDStates.enter_prompt.set()
 
 @dp.callback_query_handler(state=SDStates.enter_prompt, text='styles')
 async def styles_button_handler(callback: types.CallbackQuery, state: FSMContext):
     global callback_data
     callback_data = callback
     await state.update_data(sel_items=None, current_page=None, is_filtered=False)
-    styles_keyboard = await create_styles_keyboard(callback.from_user.id, state=state)
-    if styles_keyboard is None:
-        await callback.message.edit_text("Стили не найдены", reply_markup=main_menu)
-        await SDStates.enter_prompt.set()
+    kb = await create_styles_keyboard(callback.from_user.id, state=state)
+    if kb is None:
+        await _sd_unavailable(callback, "стили")
         return
-    await callback.message.edit_text("👇🏻 Выбери стили", reply_markup=styles_keyboard)
+    await callback.message.edit_text("👇🏻 Выбери стили", reply_markup=kb)
     await SDStates.settings_set_style.set()
 
 
@@ -151,12 +181,11 @@ async def loras_button_handler(callback: types.CallbackQuery, state: FSMContext)
     global callback_data
     callback_data = callback
     await state.update_data(sel_items=None, current_page=None, is_filtered=False)
-    lora_keyboard = await create_loras_keyboard(callback.from_user.id, state=state)
-    if lora_keyboard is None:
-        await callback.message.edit_text("LoRA не найдены", reply_markup=main_menu)
-        await SDStates.enter_prompt.set()
+    kb = await create_loras_keyboard(callback.from_user.id, state=state)
+    if kb is None:
+        await _sd_unavailable(callback, "LoRa")
         return
-    await callback.message.edit_text("👇🏻 Выбери LoRa", reply_markup=lora_keyboard)
+    await callback.message.edit_text("👇🏻 Выбери LoRa", reply_markup=kb)
     await SDStates.settings_set_lora.set()
 
 
@@ -187,16 +216,25 @@ async def _selection_action(callback, state, cut, db_field, factory, labels):
             cur = num_pages - 1
         await state.update_data(current_page=cur)
         kb = await factory(uid, state)
+        if kb is None:
+            await _sd_unavailable(callback, labels['many'])
+            return
         sd2 = await state.get_data()
         await callback.message.edit_text(f"Страница {sd2.get('current_page', 0) + 1} из {sd2.get('num_pages', 1)}",
                                          reply_markup=kb)
     elif action == "filter":
         await state.update_data(is_filtered=True)
         kb = await factory(uid, state)
+        if kb is None:
+            await _sd_unavailable(callback, labels['many'])
+            return
         await callback.message.edit_text(labels['filter'], reply_markup=kb)
     elif action == "back_from_filter":
         await state.update_data(is_filtered=False)
         kb = await factory(uid, state)
+        if kb is None:
+            await _sd_unavailable(callback, labels['many'])
+            return
         sd2 = await state.get_data()
         await callback.message.edit_text(f"Страница {sd2.get('current_page', 0) + 1} из {sd2.get('num_pages', 1)}",
                                          reply_markup=kb)
@@ -214,31 +252,27 @@ async def _selection_action(callback, state, cut, db_field, factory, labels):
         else:
             changed = await change_lora_db(uid, name)
         kb = await factory(uid, state)
+        if kb is None:
+            await _sd_unavailable(callback, labels['many'])
+            return
         await callback.message.edit_text(f"{labels['one']} {name} {'установлен' if changed else 'отключен'}",
                                          reply_markup=kb)
     else:
-        # Устаревший контракт callback (имена вместо индексов) — меню, открытое до деплоя.
         await callback.answer()
-        try:
-            await callback.bot.delete_message(callback.message.chat.id, callback.message.message_id)
-        except Exception:
-            pass
-        await send_menu(callback.message, uid)
-        await SDStates.enter_prompt.set()
 
 
 @dp.callback_query_handler(Text(startswith="style_"), state=SDStates.settings_set_style)
 async def change_style_handler(callback: types.CallbackQuery, state: FSMContext):
     await _selection_action(callback, state, 6, 'sd_style', create_styles_keyboard,
                             {'one': 'Стиль', 'many': 'Стили',
-                             'filter': '📝 Активные стили'})
+                             'filter': '📝 Активные стили (нажмите на стиль, чтобы отключить)'})
 
 
 @dp.callback_query_handler(Text(startswith="lora_"), state=SDStates.settings_set_lora)
 async def change_lora_handler(callback: types.CallbackQuery, state: FSMContext):
     await _selection_action(callback, state, 5, 'sd_lora', create_loras_keyboard,
                             {'one': 'LoRa', 'many': 'LoRa',
-                             'filter': '📝 Активные LoRa'})
+                             'filter': '📝 Активные LoRa (нажмите на LoRa, чтобы отключить)'})
 
 
 @dp.callback_query_handler(state=SDStates.enter_prompt, text='settings')

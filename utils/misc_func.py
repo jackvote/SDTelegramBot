@@ -114,8 +114,13 @@ async def change_sd_model(tg_id: int):
     sd_model = api_service.get_request_sd_api("options").json()['sd_model_checkpoint']
     db_model = await db_service.db_get_sd_setting(tg_id, "sd_model")
     if db_model != sd_model:
-        params = {"sd_model_checkpoint": db_model}
-        api_service.post_request_sd_api("options", params)
+        available = [m['model_name'] for m in api_service.get_models_sd_api()]
+        if db_model not in available:
+            logging.warning(f"[model] В БД недопустимое имя модели {db_model!r}; "
+                            f"оставляю текущую {sd_model!r} и чиню БД")
+            await db_service.db_set_sd_settings(tg_id, 'sd_model', sd_model)
+            return sd_model
+        api_service.post_request_sd_api("options", {"sd_model_checkpoint": db_model})
     return db_model
 
 def is_sd_launched():
