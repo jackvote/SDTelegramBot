@@ -154,9 +154,6 @@ async def change_lora_db(tg_id: int, entered_lora):
             await db_service.db_set_sd_settings(tg_id, 'sd_lora', '&'.join(result))
             return False
 
-async def user_samplers(api_samplers, hide_user_samplers):
-    return [x for x in api_samplers if x not in hide_user_samplers]
-
 def _weight(weights, i):
     if weights and i < len(weights) and weights[i] is not None:
         return weights[i]

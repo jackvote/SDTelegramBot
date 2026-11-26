@@ -12,7 +12,6 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import settings.sd_config as sd_config
 import settings.string_variables as str_var
 from utils.db_services import db_service
-from utils.misc_func import user_samplers
 from utils.sd_api import api_service
 
 main_menu = InlineKeyboardMarkup(
@@ -100,6 +99,10 @@ img2img_cancel_menu = InlineKeyboardMarkup(
         ],
     ]
 )
+
+# в inline_menu.py вместо строки from utils.misc_func import user_samplers:
+async def user_samplers(api_samplers, hide_user_samplers):
+    return [x for x in api_samplers if x not in hide_user_samplers]
 
 async def text_slicer(list_items):
     for i in range(0, len(list_items)):
